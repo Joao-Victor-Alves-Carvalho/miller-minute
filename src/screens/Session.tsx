@@ -10,7 +10,7 @@ import { SpeakButton } from '../components/SpeakButton';
 import { checkTyped, matchSpoken } from '../lib/answer';
 import { buildChoices } from '../lib/choices';
 import { explain } from '../lib/explain';
-import { canRecognize, listen, type Listening } from '../lib/listen';
+import { speechSupport, listen, type Listening  } from '../lib/listen';
 import { answerField, clozeParts, isChoice, resolveMode, type Mode } from '../lib/modes';
 import {
   capabilities,
@@ -65,7 +65,8 @@ const LABEL: Record<Mode, string> = {
   speak: 'Fale em inglês',
 };
 
-const SUPPORT = { speech: canSpeak(), recognition: canRecognize() };
+/** Recalculado a cada uso: sem internet no Android, o microfone sai de cena. */
+const support = () => speechSupport(canSpeak());
 const pick = (list: readonly string[]) => list[Math.floor(Math.random() * list.length)] ?? '';
 
 export function Session({ steps, kind, pool, progress, updateProgress, setMood, onFinish, onExit }: Props) {
@@ -94,7 +95,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   // Tipo de pergunta efetivo: troca áudio/microfone quando estão pausados ou indisponíveis.
   const mode: Mode = useMemo(() => {
     if (!step || !item) return 'en-pt-choice';
-    return resolveMode(step.mode, item, capabilities(progress, Date.now(), SUPPORT));
+    return resolveMode(step.mode, item, capabilities(progress, Date.now(), support()));
   }, [index, step, item, progress.pauses]);
 
   // Alternativas fixas durante o passo: reagendar um erro muda a fila, mas não o passo atual.

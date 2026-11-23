@@ -2100,3 +2100,242 @@ input:focus-visible {
   color: var(--cyan);
   letter-spacing: 0.02em;
 }
+
+.suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggest {
+  flex: 1 1 auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+/* Missão do metrô */
+.net-pill {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.net-pill.off {
+  color: var(--gold);
+  border-color: rgba(255, 201, 77, 0.4);
+}
+
+.metro-meter {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.metro-meter span {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.metro-meter span.on {
+  background: var(--good);
+}
+
+.metro-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metro-step {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+}
+
+.metro-step.next {
+  border-color: rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.3) inset;
+}
+
+.metro-step.done {
+  opacity: 0.7;
+}
+
+.metro-step .texts {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metro-step .texts span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.metro-num {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  background: var(--surface-strong);
+}
+
+.metro-step.done .metro-num {
+  background: var(--good);
+  color: var(--good-ink);
+}
+
+.metro-num svg {
+  width: 22px;
+  height: 22px;
+}
+
+.metro-go {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.metro-step.next .metro-go {
+  color: var(--text);
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checks li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.checks li > span {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.checks li.ok > span {
+  background: var(--good);
+  color: var(--good-ink);
+}
+
+.checks li.warn > span {
+  background: var(--gold);
+  color: #2a1d00;
+}
+
+.checks li.info > span {
+  background: transparent;
+}
+
+.checks strong {
+  font-size: 14px;
+}
+
+.checks p {
+  margin: 4px 0 0;
+}
+
+/* Cápsula do tempo */
+.prompt-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+}
+
+.prompt-box p {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.rec-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.rec-time {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bad);
+  animation: blink 1.2s infinite;
+}
+
+.rec-video {
+  width: 100%;
+  max-height: 50dvh;
+  border-radius: 16px;
+  background: #000;
+  object-fit: cover;
+}
+
+.capsule-audio {
+  width: 100%;
+}
+
+.capsule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.capsule-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}

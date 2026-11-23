@@ -52,9 +52,31 @@ export interface Progress {
   bestStreak: number;
   /** Medalhas conquistadas: id → quando (ms). */
   medals: Record<string, number>;
+  /** Palavras novas extras liberadas hoje pelo botão "+6". */
+  bonusNew: { day: string; count: number };
+  /** Atividades concluídas hoje (para a Missão do metrô). */
+  today: { day: string; done: Activity[] };
+  /** Cápsula do tempo: gravações feitas (o áudio fica no IndexedDB do aparelho). */
+  capsules: CapsuleEntry[];
 }
 
+export type Activity = 'session' | 'story' | 'ear' | 'chat';
+
+export interface CapsuleEntry {
+  /** Id da gravação no IndexedDB. */
+  id: string;
+  /** Mês da missão (1 a 6+). */
+  month: number;
+  at: number;
+  durationMs: number;
+  /** Vídeo é salvo na galeria; aqui fica só o registro. */
+  kind: 'audio' | 'video';
+}
+
+/** Fração do pacote anterior que precisa ter sido VISTA para liberar o próximo. */
 export const UNLOCK_RATIO = 0.8;
+/** Palavras extras por toque no botão "Quero mais palavras". */
+export const BONUS_STEP = 6;
 
 export function emptyProgress(): Progress {
   return {
@@ -66,7 +88,7 @@ export function emptyProgress(): Progress {
     totalAnswers: 0,
     totalCorrect: 0,
     bestCombo: 0,
-    settings: { autoAudio: true, sounds: true, newPerDay: 12, goalMinutes: 10, focusPack: null, reminder: '20:00' },
+    settings: { autoAudio: true, sounds: true, newPerDay: 20, goalMinutes: 10, focusPack: null, reminder: '20:00' },
     pauses: { audio: 0, mic: 0 },
     history: {},
     situations: {},
@@ -75,6 +97,9 @@ export function emptyProgress(): Progress {
     totalMs: 0,
     bestStreak: 0,
     medals: {},
+    bonusNew: { day: '', count: 0 },
+    today: { day: '', done: [] },
+    capsules: [],
   };
 }
 
@@ -87,9 +112,16 @@ export function masteredRatio(pack: Pack, cards: Readonly<Record<string, CardSta
 /** Palavras vistas para liberar os pacotes temáticos. */
 export const THEME_UNLOCK_SEEN = 60;
 
+/** Fração do pacote já vista (palavras que apareceram pelo menos uma vez). */
+export function seenRatio(pack: Pack, cards: Readonly<Record<string, CardState>>): number {
+  if (pack.items.length === 0) return 1;
+  return pack.items.filter((item) => cards[item.id]).length / pack.items.length;
+}
+
 /**
- * Pacotes liberados: o primeiro principal sempre; cada principal seguinte quando o anterior
- * tem 80% dos itens dominados. Os temáticos liberam com 60 palavras vistas.
+ * Pacotes liberados: o primeiro principal sempre; cada principal seguinte quando 80% do
+ * anterior já foi VISTO (as revisões continuam pelo FSRS, sem travar as palavras novas).
+ * Os temáticos liberam com 60 palavras vistas.
  */
 export function unlockedPacks(packs: readonly Pack[], cards: Readonly<Record<string, CardState>>): Pack[] {
   const out: Pack[] = [];
@@ -97,7 +129,7 @@ export function unlockedPacks(packs: readonly Pack[], cards: Readonly<Record<str
   for (const pack of packs.filter((p) => p.kind === 'core')) {
     if (!open) break;
     out.push(pack);
-    open = masteredRatio(pack, cards) >= UNLOCK_RATIO;
+    open = seenRatio(pack, cards) >= UNLOCK_RATIO;
   }
   if (Object.keys(cards).length >= THEME_UNLOCK_SEEN) out.push(...packs.filter((p) => p.kind === 'theme'));
   return out;
@@ -113,7 +145,27 @@ export function orderByFocus<T extends { id: string }>(items: readonly T[], focu
 export function newAllowedToday(progress: Progress, now: number): number {
   const today = dayKey(now);
   const used = progress.newToday.day === today ? progress.newToday.count : 0;
-  return Math.max(0, progress.settings.newPerDay - used);
+  const bonus = progress.bonusNew.day === today ? progress.bonusNew.count : 0;
+  return Math.max(0, progress.settings.newPerDay + bonus - used);
+}
+
+/** Libera mais palavras novas hoje (botão "Quero mais palavras"). */
+export function addBonusNew(progress: Progress, now: number, count = BONUS_STEP): Progress {
+  const today = dayKey(now);
+  const base = progress.bonusNew.day === today ? progress.bonusNew.count : 0;
+  return { ...progress, bonusNew: { day: today, count: base + count } };
+}
+
+/** Marca uma atividade como feita hoje. */
+export function markActivity(progress: Progress, now: number, activity: Activity): Progress {
+  const today = dayKey(now);
+  const done = progress.today.day === today ? progress.today.done : [];
+  if (done.includes(activity)) return progress.today.day === today ? progress : { ...progress, today: { day: today, done } };
+  return { ...progress, today: { day: today, done: [...done, activity] } };
+}
+
+export function doneToday(progress: Progress, now: number): Activity[] {
+  return progress.today.day === dayKey(now) ? progress.today.done : [];
 }
 
 /** Sequência de dias: mantém se estudou ontem, zera se pulou um dia. */
@@ -174,19 +226,19 @@ export function todayMs(progress: Progress, now: number): number {
 export function completeStory(progress: Progress, id: string, score: number, now: number): Progress {
   const prev = progress.stories[id] ?? { done: 0, best: 0 };
   const next = { ...progress, stories: { ...progress.stories, [id]: { done: prev.done + 1, best: Math.max(prev.best, score) } } };
-  return registerStudyDay(next, now);
+  return markActivity(registerStudyDay(next, now), now, 'story');
 }
 
 /** Registra uma rodada de ditado ou shadowing (conta como dia de estudo). */
 export function completeEar(progress: Progress, kind: 'dictation' | 'shadowing', now: number): Progress {
-  return registerStudyDay({ ...progress, ear: { ...progress.ear, [kind]: progress.ear[kind] + 1 } }, now);
+  return markActivity(registerStudyDay({ ...progress, ear: { ...progress.ear, [kind]: progress.ear[kind] + 1 } }, now), now, 'ear');
 }
 
 /** Registra uma situação concluída (conta como dia de estudo). */
 export function completeSituation(progress: Progress, id: string, stars: number, now: number): Progress {
   const prev = progress.situations[id] ?? { done: 0, best: 0 };
   const next = { ...progress, situations: { ...progress.situations, [id]: { done: prev.done + 1, best: Math.max(prev.best, stars) } } };
-  return registerStudyDay(next, now);
+  return markActivity(registerStudyDay(next, now), now, 'chat');
 }
 
 /** Esconde perguntas de áudio ou microfone por 15 minutos. */
@@ -226,7 +278,6 @@ export function normalizeProgress(parsed: Partial<Progress>): Progress {
     ...parsed,
     version: 1,
     cards: { ...parsed.cards },
-    settings: { ...base.settings, ...parsed.settings },
     pauses: { ...base.pauses, ...parsed.pauses },
     history: { ...parsed.history },
     situations: { ...parsed.situations },
@@ -235,6 +286,11 @@ export function normalizeProgress(parsed: Partial<Progress>): Progress {
     totalMs: typeof parsed.totalMs === 'number' ? parsed.totalMs : 0,
     bestStreak: Math.max(parsed.bestStreak ?? 0, parsed.streak ?? 0),
     medals: { ...parsed.medals },
+    // 12 era o padrão antigo de palavras novas por dia: sobe para o novo padrão (20).
+    settings: { ...base.settings, ...parsed.settings, newPerDay: parsed.settings?.newPerDay === 12 ? 20 : (parsed.settings?.newPerDay ?? base.settings.newPerDay) },
+    bonusNew: { ...base.bonusNew, ...parsed.bonusNew },
+    today: { ...base.today, ...parsed.today },
+    capsules: Array.isArray(parsed.capsules) ? parsed.capsules : [],
   };
 }
 

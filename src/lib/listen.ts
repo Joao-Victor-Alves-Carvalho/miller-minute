@@ -39,6 +39,25 @@ export function canRecognize(): boolean {
   return ctor() !== null;
 }
 
+export function isIos(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * Reconhecimento de voz utilizável AGORA: no Android (Chrome) ele depende da internet,
+ * então sem sinal (no metrô) as perguntas de falar são trocadas por outras.
+ */
+export function recognitionUsable(): boolean {
+  if (!canRecognize()) return false;
+  return isIos() || typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/** Recursos de voz do aparelho neste momento (para `capabilities`). */
+export function speechSupport(canSpeakNow: boolean): { speech: boolean; recognition: boolean } {
+  return { speech: canSpeakNow, recognition: recognitionUsable() };
+}
+
 export interface Listening {
   /** Alternativas do que foi dito (vazio se nada foi entendido). */
   result: Promise<string[]>;

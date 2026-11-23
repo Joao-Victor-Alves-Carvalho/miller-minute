@@ -74,6 +74,25 @@ biblioteca `web-push` (só no GitHub Actions, não vai para o app). As mensagens
 e não sabem do progresso (que fica só no celular). Para avisos personalizados ("12 revisões
 esperando"), seria preciso app nativo ou sincronização na nuvem.
 
+## Rumo à fluência em 6 meses (v0.7, etapa A)
+
+Meta combinada: conversar com estrangeiros em qualquer lugar, com 1h a 1h30 por dia
+(30 a 40 min offline no metrô). Etapa A, sem IA:
+- **Avanço sem travas**: 20 palavras novas por dia (o antigo padrão 12 migra para 20), botão
+  "Quero mais palavras (+6)" quando tudo está em dia, e o próximo pacote libera com 80% do
+  anterior **visto** (não mais dominado: as revisões continuam pelo FSRS).
+- **Missão do metrô**: 3 etapas offline (~35 min): sessão do dia, uma história, e ditado ou uma
+  conversa (alternando por dia), com verificação de "pronto para ficar sem sinal" (app salvo,
+  voz em inglês instalada). No Android, sem internet, perguntas de falar são trocadas por outras.
+- **Cápsula do tempo (Mensagens de Cooper)**: uma mensagem de áudio por mês (até 3 min), mesma
+  pergunta-base + um extra por mês, guardada no aparelho (IndexedDB); "antes e agora" a partir
+  do 2º mês; vídeo opcional no mês 1 e no 6, salvo na galeria. Exportar para guardar cópia.
+
+Etapa B (precisa de chave da API da Anthropic e de um pequeno servidor): Chamada da Endurance
+(conversa por voz com Claude Haiku 5.5), fila offline (diário e frases capturadas no metrô são
+corrigidos quando voltar a internet), conteúdo personalizado baixado antes, análise dos áudios
+da cápsula e teste mensal de nível.
+
 ## Próximas fases
 
 1. **Fase 2 — FSRS**: trocar o Leitner pelo FSRS, com botões "difícil / bom / fácil".

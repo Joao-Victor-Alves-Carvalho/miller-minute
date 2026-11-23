@@ -217,13 +217,25 @@ describe('progresso', () => {
     expect(currentStreak(p, NOW + DAY * 3)).toBe(0);
   });
 
-  it('limite diário de itens novos', () => {
-    const p = registerNewItems(emptyProgress(), NOW, 5);
-    expect(newAllowedToday(p, NOW)).toBe(7);
-    expect(newAllowedToday(p, NOW + DAY)).toBe(12);
+  it('limite diário de itens novos (padrão 20) e o botão "+6"', async () => {
+    const { addBonusNew } = await import('./progress');
+    let p = registerNewItems(emptyProgress(), NOW, 20);
+    expect(newAllowedToday(p, NOW)).toBe(0);
+    p = addBonusNew(p, NOW);
+    expect(newAllowedToday(p, NOW)).toBe(6);
+    p = addBonusNew(p, NOW);
+    expect(newAllowedToday(p, NOW)).toBe(12);
+    expect(newAllowedToday(p, NOW + DAY)).toBe(20); // o bônus vale só no dia
   });
 
-  it('libera o próximo pacote com 80% dominado', () => {
+  it('migra o antigo padrão de 12 novas por dia para 20, sem mexer em escolhas diferentes', async () => {
+    const { normalizeProgress } = await import('./progress');
+    expect(normalizeProgress({ cards: {}, settings: { newPerDay: 12 } as never }).settings.newPerDay).toBe(20);
+    expect(normalizeProgress({ cards: {}, settings: { newPerDay: 30 } as never }).settings.newPerDay).toBe(30);
+    expect(normalizeProgress({ cards: {} }).settings.newPerDay).toBe(20);
+  });
+
+  it('libera o próximo pacote quando 80% do anterior já foi VISTO (não precisa dominar)', () => {
     const mk = (id: string, kind: Pack['kind'] = 'core'): Pack => ({
       id,
       title: id,
@@ -235,7 +247,9 @@ describe('progresso', () => {
     const b = mk('b');
     const cards: Record<string, CardState> = {};
     expect(unlockedPacks([a, b], cards)).toHaveLength(1);
-    for (let i = 0; i < 8; i++) cards[`a:${i}`] = { ...newCard(NOW), box: 4 };
+    for (let i = 0; i < 7; i++) cards[`a:${i}`] = newCard(NOW);
+    expect(unlockedPacks([a, b], cards)).toHaveLength(1);
+    cards['a:7'] = newCard(NOW); // 8 de 10 vistas, nenhuma dominada
     expect(unlockedPacks([a, b], cards)).toHaveLength(2);
   });
 
@@ -541,5 +555,49 @@ describe('notificações', () => {
     const bytes = base64UrlToBytes(VAPID_PUBLIC_KEY);
     expect(bytes.length).toBe(65);
     expect(bytes[0]).toBe(4);
+  });
+});
+
+describe('missão do metrô', () => {
+  it('monta 3 etapas offline e marca o que já foi feito hoje', async () => {
+    const { buildMetroPlan, pickNext } = await import('./metro');
+    const { markActivity, doneToday, completeStory } = await import('./progress');
+    const { stories } = await import('../data/stories');
+    const { situations } = await import('../data/situations');
+    const { scenes } = await import('../data/scenes');
+    let p = emptyProgress();
+    const content = { stories, chats: [...situations, ...scenes], audioOk: true };
+    const plan = buildMetroPlan(p, NOW, content);
+    expect(plan.map((s) => s.activity)).toEqual(expect.arrayContaining(['session', 'story']));
+    expect(plan).toHaveLength(3);
+    expect(plan.every((s) => !s.done)).toBe(true);
+    p = markActivity(p, NOW, 'session');
+    p = markActivity(p, NOW, 'session');
+    expect(doneToday(p, NOW)).toEqual(['session']);
+    expect(doneToday(p, NOW + DAY)).toEqual([]);
+    p = completeStory(p, 'manha-tom', 3, NOW);
+    expect(buildMetroPlan(p, NOW, content).filter((s) => s.done).map((s) => s.activity)).toEqual(['session', 'story']);
+    // A próxima história sugerida é uma ainda não lida (quando liberada).
+    expect(pickNext(stories, { 'manha-tom': { done: 1, best: 3 } }, 40)?.id).toBe('cafe-ana');
+    expect(pickNext(stories, { 'manha-tom': { done: 1, best: 3 } }, 0)?.id).toBe('manha-tom');
+    // Sem áudio, a 3ª etapa é uma conversa (nunca ditado).
+    expect(buildMetroPlan(p, NOW, { ...content, audioOk: false }).at(-1)?.activity).toBe('chat');
+  });
+});
+
+describe('cápsula do tempo', () => {
+  it('conta os meses a partir da primeira mensagem e libera a próxima depois de 30 dias', async () => {
+    const { capsuleStatus, beforeAndNow, promptForMonth, MONTH_MS } = await import('./capsule');
+    expect(capsuleStatus([], NOW)).toEqual({ month: 1, recorded: false, daysToNext: 0 });
+    const first = { id: 'a', month: 1, at: NOW, durationMs: 60_000, kind: 'audio' as const };
+    expect(capsuleStatus([first], NOW + DAY)).toEqual({ month: 1, recorded: true, daysToNext: 29 });
+    expect(capsuleStatus([first], NOW + MONTH_MS + 1000)).toMatchObject({ month: 2, recorded: false });
+    const video = { id: 'v', month: 1, at: NOW, durationMs: 1, kind: 'video' as const };
+    expect(capsuleStatus([video], NOW)).toMatchObject({ month: 1, recorded: false });
+    expect(beforeAndNow([first])).toBeNull();
+    const second = { ...first, id: 'b', month: 2, at: NOW + MONTH_MS };
+    expect(beforeAndNow([second, first])?.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(promptForMonth(6).en).toContain('past self');
+    expect(promptForMonth(9).en).toContain('past self');
   });
 });

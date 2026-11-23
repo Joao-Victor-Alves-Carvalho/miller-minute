@@ -4,7 +4,7 @@ import { pack1 } from '../data/pack1';
 import type { Item } from '../data/types';
 import { IconArrowLeft, IconMic, IconSpeaker } from '../components/Icons';
 import { compareWords, type WordCheck } from '../lib/compare';
-import { canRecognize, listen, type Listening } from '../lib/listen';
+import { speechSupport, listen, type Listening  } from '../lib/listen';
 import { capabilities, pause, type Progress } from '../lib/progress';
 import { shuffle } from '../lib/session';
 import { playComplete, playCorrect, playWrong } from '../lib/sfx';
@@ -12,7 +12,8 @@ import { canSpeak, speak, stopSpeaking, vibrate } from '../lib/speech';
 
 type Kind = 'dictation' | 'shadowing';
 const ROUND = 6;
-const SUPPORT = { speech: canSpeak(), recognition: canRecognize() };
+/** Recalculado a cada uso: sem internet no Android, o microfone sai de cena. */
+const support = () => speechSupport(canSpeak());
 
 interface Props {
   pool: Item[];
@@ -32,7 +33,7 @@ function pickSentences(pool: Item[], progress: Progress): { en: string; pt: stri
 }
 
 export function Ear({ pool, progress, updateProgress, onRoundDone, onBack }: Props) {
-  const caps = capabilities(progress, Date.now(), SUPPORT);
+  const caps = capabilities(progress, Date.now(), support());
   const canDictation = caps.audio;
   const canShadowing = caps.audio && caps.mic;
   const [kind, setKind] = useState<Kind | null>(null);

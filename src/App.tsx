@@ -20,6 +20,9 @@ import {
   orderByFocus,
   pausedMinutes,
   registerStudyDay,
+  markActivity,
+  addBonusNew,
+  BONUS_STEP,
   resume,
   saveProgress,
   unlockedPacks,
@@ -37,6 +40,10 @@ import { Situations } from './screens/Situations';
 import { Stories } from './screens/Stories';
 import { StoryReader } from './screens/StoryReader';
 import { Words } from './screens/Words';
+import { Capsule } from './screens/Capsule';
+import { Metro } from './screens/Metro';
+import { buildMetroPlan, type MetroStep } from './lib/metro';
+import { canSpeak } from './lib/speech';
 
 type Screen =
   | { name: 'home' }
@@ -50,9 +57,11 @@ type Screen =
   | { name: 'story'; id: string; key: number }
   | { name: 'ear' }
   | { name: 'progress' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'metro' }
+  | { name: 'capsule' };
 
-export type NavTarget = 'words' | 'situations' | 'scenes' | 'stories' | 'ear' | 'progress' | 'settings';
+export type NavTarget = 'words' | 'situations' | 'scenes' | 'stories' | 'ear' | 'progress' | 'settings' | 'metro' | 'capsule';
 
 /** Telas em que o relógio de estudo (Tempo de Miller) conta. */
 const STUDY_SCREENS = new Set<Screen['name']>(['session', 'chat', 'story', 'ear']);
@@ -133,19 +142,53 @@ export function App() {
     openSession(quizSteps(weakest), 'extra');
   };
 
+  /** "Quero mais palavras": libera +6 novas hoje e já começa a sessão com elas. */
+  const moreWords = () => {
+    setProgress((p) => addBonusNew(p, Date.now()));
+    openSession(buildSession(plan.due, plan.unseen.slice(0, BONUS_STEP), progress.cards, Math.random), 'normal');
+  };
+
   const startMistakes = () => openSession(quizSteps(plan.mistakes.slice(0, 15)), 'mistakes');
 
   const finish = (summary: Summary) => {
-    setProgress((p) => ({ ...registerStudyDay(p, Date.now()), bestCombo: Math.max(p.bestCombo, summary.bestCombo) }));
+    setProgress((p) => ({ ...markActivity(registerStudyDay(p, Date.now()), Date.now(), 'session'), bestCombo: Math.max(p.bestCombo, summary.bestCombo) }));
     setScreen({ name: 'result', summary, ms: Math.max(0, progress.totalMs - sessionStartMs.current) });
   };
 
+  // Dentro da Missão do metrô, "voltar" das atividades retorna para a missão.
+  const [inMetro, setInMetro] = useState(false);
+
   const goHome = () => {
     setMood('idle');
+    setScreen(inMetro ? { name: 'metro' } : { name: 'home' });
+  };
+
+  const leaveMetro = () => {
+    setInMetro(false);
     setScreen({ name: 'home' });
   };
 
-  const navigate = (target: NavTarget) => setScreen({ name: target } as Screen);
+  const metroSteps = buildMetroPlan(progress, Date.now(), { stories, chats: [...situations, ...scenes], audioOk: canSpeak() });
+
+  const runMetroStep = (step: MetroStep) => {
+    if (step.activity === 'session') {
+      if (plan.due.length + plan.newCount > 0) start();
+      else if (plan.unseen.length > 0) moreWords();
+      else startExtra();
+    } else if (step.activity === 'story' && step.targetId) {
+      setScreen({ name: 'story', id: step.targetId, key: Date.now() });
+    } else if (step.activity === 'chat' && step.targetId) {
+      const from = scenes.some((x) => x.id === step.targetId) ? 'scenes' : 'situations';
+      setScreen({ name: 'chat', id: step.targetId, key: Date.now(), from });
+    } else {
+      setScreen({ name: 'ear' });
+    }
+  };
+
+  const navigate = (target: NavTarget) => {
+    if (target === 'metro') setInMetro(true);
+    setScreen({ name: target } as Screen);
+  };
   const soundOn = progress.settings.sounds && pausedMinutes(progress, 'audio', Date.now()) === 0;
   const chatSituation = screen.name === 'chat' ? [...situations, ...scenes].find((s) => s.id === screen.id) : undefined;
   const story = screen.name === 'story' ? stories.find((s) => s.id === screen.id) : undefined;
@@ -174,6 +217,8 @@ export function App() {
                 seenWords={seenWords}
                 onStart={start}
                 onExtra={startExtra}
+                unseenLeft={plan.unseen.length}
+                onMoreWords={moreWords}
                 onMistakes={startMistakes}
                 onNavigate={navigate}
                 onFocus={(id) => setProgress((p) => ({ ...p, settings: { ...p.settings, focusPack: id } }))}
@@ -230,7 +275,7 @@ export function App() {
                 progress={progress}
                 updateProgress={updateProgress}
                 onComplete={(stars) => setProgress((p) => completeSituation(p, chatSituation.id, stars, Date.now()))}
-                onBack={() => setScreen(screen.from === 'scenes' ? { name: 'scenes' } : { name: 'situations' })}
+                onBack={() => setScreen(inMetro ? { name: 'metro' } : screen.from === 'scenes' ? { name: 'scenes' } : { name: 'situations' })}
               />
             )}
             {screen.name === 'stories' && (
@@ -246,7 +291,7 @@ export function App() {
                 story={story}
                 progress={progress}
                 onComplete={(score) => setProgress((p) => completeStory(p, story.id, score, Date.now()))}
-                onBack={() => setScreen({ name: 'stories' })}
+                onBack={() => setScreen(inMetro ? { name: 'metro' } : { name: 'stories' })}
               />
             )}
             {screen.name === 'ear' && (
@@ -260,6 +305,8 @@ export function App() {
             )}
             {screen.name === 'progress' && <ProgressScreen progress={progress} onBack={goHome} onWords={() => setScreen({ name: 'words' })} />}
             {screen.name === 'settings' && <Settings progress={progress} setProgress={setProgress} onBack={goHome} />}
+            {screen.name === 'metro' && <Metro steps={metroSteps} onStep={runMetroStep} onBack={leaveMetro} />}
+            {screen.name === 'capsule' && <Capsule progress={progress} setProgress={setProgress} onBack={goHome} />}
           </motion.div>
         </AnimatePresence>
       </main>
