@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
 import { IconArrowLeft } from '../components/Icons';
+import { saveFile } from '../lib/files';
 import { backupJson, decodeBackup, describe, encodeBackup } from '../lib/backup';
 import { buildReminderIcs, parseTime } from '../lib/ics';
 import type { Progress, Settings as SettingsT } from '../lib/progress';
@@ -7,28 +8,6 @@ import { disablePush, enablePush, pushStatus, testNotification, type PushStatus 
 import { playCorrect } from '../lib/sfx';
 
 const APP_URL = 'https://joao-victor-alves-carvalho.github.io/miller-minute/';
-
-/** Salva/compartilha um arquivo: usa a folha de compartilhar do celular quando existe. */
-async function saveFile(name: string, type: string, content: string): Promise<void> {
-  const file = new File([content], name, { type });
-  const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
-  if (nav.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: name });
-      return;
-    } catch {
-      // cancelado: cai para o download
-    }
-  }
-  const url = URL.createObjectURL(file);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
 
 function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: () => void }) {
   return (
@@ -146,7 +125,7 @@ export function Settings({ progress, setProgress, onBack }: { progress: Progress
         <p className="eyebrow" style={{ marginTop: 10 }}>
           Palavras novas por dia
         </p>
-        <Choice value={s.newPerDay} options={[6, 12, 18, 24]} suffix="" onChange={(v) => set({ newPerDay: v })} />
+        <Choice value={s.newPerDay} options={[10, 15, 20, 30]} suffix="" onChange={(v) => set({ newPerDay: v })} />
       </div>
 
       <div className="settings-card glass">

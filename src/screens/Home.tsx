@@ -7,6 +7,7 @@ import { stories } from '../data/stories';
 import type { Pack } from '../data/types';
 import { IconFlame, IconMic, IconSpeaker } from '../components/Icons';
 import { isUnlocked } from '../lib/chat';
+import { capsuleStatus } from '../lib/capsule';
 import { earthYearsIfOnMiller, formatEarth, formatMiller, formatStudy, millerSeconds } from '../lib/miller';
 import {
   currentStreak,
@@ -15,6 +16,9 @@ import {
   THEME_UNLOCK_SEEN,
   todayMs,
   UNLOCK_RATIO,
+  BONUS_STEP,
+  seenRatio,
+  doneToday,
   type PauseKind,
   type Progress,
 } from '../lib/progress';
@@ -29,6 +33,9 @@ interface Props {
   seenWords: number;
   onStart: () => void;
   onExtra: () => void;
+  /** Palavras novas ainda não vistas nos pacotes liberados. */
+  unseenLeft: number;
+  onMoreWords: () => void;
   onMistakes: () => void;
   onNavigate: (target: NavTarget) => void;
   onFocus: (packId: string | null) => void;
@@ -49,7 +56,7 @@ const enter = (i: number) => ({
 });
 
 export function Home(props: Props) {
-  const { progress, dueCount, newCount, mistakesCount, unlocked, seenWords, onStart, onExtra, onMistakes, onNavigate, onFocus, onResume } = props;
+  const { progress, dueCount, newCount, mistakesCount, unlocked, seenWords, onStart, onExtra, unseenLeft, onMoreWords, onMistakes, onNavigate, onFocus, onResume } = props;
   const now = Date.now();
   const streak = currentStreak(progress, now);
   const hasWork = dueCount + newCount > 0;
@@ -64,6 +71,13 @@ export function Home(props: Props) {
   const openStories = stories.filter((s) => seenWords >= s.unlockAt).length;
   const openScenes = scenes.filter((s) => isUnlocked(s, seenWords)).length;
   const focus = progress.settings.focusPack;
+  const metroDone = Math.min(3, doneToday(progress, now).length);
+  const capsule = capsuleStatus(progress.capsules, now);
+  const corePacks = packs.filter((p) => p.kind === 'core');
+  const prevSeen = (pack: Pack) => {
+    const prev = corePacks[corePacks.indexOf(pack) - 1];
+    return prev ? seenRatio(prev, progress.cards) : 1;
+  };
 
   const tiles: { id: string; emoji: string; title: string; sub: string; onClick: () => void; badge?: number }[] = [
     { id: 'situations', emoji: '💬', title: 'Situações reais', sub: `${openSituations} de ${situations.length} liberadas`, onClick: () => onNavigate('situations') },
@@ -77,6 +91,15 @@ export function Home(props: Props) {
       sub: mistakesCount > 0 ? `${mistakesCount} para revisar` : 'Nenhum erro recente',
       onClick: onMistakes,
       badge: mistakesCount,
+    },
+    { id: 'metro', emoji: '🚇', title: 'Missão do metrô', sub: `${metroDone}/3 hoje · funciona offline`, onClick: () => onNavigate('metro') },
+    {
+      id: 'capsule',
+      emoji: '📼',
+      title: 'Cápsula do tempo',
+      sub: capsule.recorded ? `Próxima em ${capsule.daysToNext} dias` : `Mensagem do mês ${capsule.month}`,
+      onClick: () => onNavigate('capsule'),
+      badge: capsule.recorded ? 0 : 1,
     },
     { id: 'progress', emoji: '📈', title: 'Progresso', sub: `Gráfico, medalhas e ${seenWords} palavras`, onClick: () => onNavigate('progress') },
   ];
@@ -134,8 +157,19 @@ export function Home(props: Props) {
         ) : (
           <>
             <p className="muted" style={{ margin: 0 }}>
-              Você revisou tudo o que estava pendente. As próximas revisões chegam nos próximos dias.
+              Revisões em dia e as palavras novas de hoje já foram. Quer continuar? Aprenda mais palavras ou pratique de outro jeito.
             </p>
+            {unseenLeft > 0 && (
+              <motion.button type="button" className="btn btn-primary btn-block" onClick={onMoreWords} whileTap={{ scale: 0.96 }}>
+                ➕ Quero mais palavras (+{Math.min(BONUS_STEP, unseenLeft)})
+              </motion.button>
+            )}
+            <div className="suggest-row" role="group" aria-label="Outras formas de praticar">
+              <button type="button" className="suggest" onClick={() => onNavigate('situations')}>💬 Situação</button>
+              <button type="button" className="suggest" onClick={() => onNavigate('scenes')}>🎬 Cena</button>
+              <button type="button" className="suggest" onClick={() => onNavigate('stories')}>📖 História</button>
+              <button type="button" className="suggest" onClick={() => onNavigate('ear')}>🎧 Ditado</button>
+            </div>
             {seenAny && (
               <button type="button" className="btn btn-ghost btn-block" onClick={onExtra}>
                 Treino extra (não conta no agendamento)
@@ -242,7 +276,7 @@ export function Home(props: Props) {
         const lockMsg =
           pack.kind === 'theme'
             ? `Libera com ${THEME_UNLOCK_SEEN} palavras vistas (faltam ${Math.max(0, THEME_UNLOCK_SEEN - seenWords)}).`
-            : `Libera com ${Math.round(UNLOCK_RATIO * 100)}% do pacote anterior dominado.`;
+            : `Libera quando você tiver visto ${Math.round(UNLOCK_RATIO * 100)}% do pacote anterior (agora: ${Math.round(prevSeen(pack) * 100)}%).`;
         return (
           <motion.div key={pack.id} className={`pack glass${locked ? ' locked' : ''}${focused ? ' focused' : ''}`} {...enter(6 + i)}>
             <div className="row">

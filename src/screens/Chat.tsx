@@ -4,7 +4,7 @@ import { Confetti } from '../components/Confetti';
 import { IconArrowLeft, IconMic, IconSpeaker } from '../components/Icons';
 import { matchSpoken } from '../lib/answer';
 import { checkBuild, explainBuild, isMyTurn, myTurns, phrasesOf, stars as starsFor, tokens, type ChatOption, type Situation } from '../lib/chat';
-import { canRecognize, listen, type Listening } from '../lib/listen';
+import { speechSupport, listen, type Listening  } from '../lib/listen';
 import { capabilities, pause, pausedMinutes, type Progress } from '../lib/progress';
 import { shuffle } from '../lib/session';
 import { playComplete, playCorrect, playWrong } from '../lib/sfx';
@@ -26,7 +26,8 @@ interface Props {
   onBack: () => void;
 }
 
-const SUPPORT = { speech: canSpeak(), recognition: canRecognize() };
+/** Recalculado a cada uso: sem internet no Android, o microfone sai de cena. */
+const support = () => speechSupport(canSpeak());
 
 export function Chat({ situation, progress, updateProgress, onComplete, onBack }: Props) {
   const [pos, setPos] = useState(0);
@@ -47,7 +48,7 @@ export function Chat({ situation, progress, updateProgress, onComplete, onBack }
 
   const now = Date.now();
   const audioOn = pausedMinutes(progress, 'audio', now) === 0;
-  const caps = capabilities(progress, now, SUPPORT);
+  const caps = capabilities(progress, now, support());
   const voiceOn = progress.settings.autoAudio && audioOn;
   const soundsOn = progress.settings.sounds && audioOn;
   const step = situation.steps[pos];
