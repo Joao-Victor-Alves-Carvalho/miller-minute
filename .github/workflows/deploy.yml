@@ -1,5 +1,6 @@
-# Publica o app no GitHub Pages. Só roda quando acionado manualmente (aba Actions → Deploy → Run workflow).
-# Antes: Settings → Pages → Source: "GitHub Actions". No plano gratuito, o Pages exige repositório público.
+# Publica o app no GitHub Pages. Roda quando acionado manualmente (aba Actions → Deploy → Run workflow).
+# Dois jobs (estrutura recomendada pelo GitHub): "build" gera e envia o site; "deploy" publica.
+# Separar evita a falha "No artifacts named github-pages" quando o envio ainda não apareceu na API.
 name: Deploy
 
 on:
@@ -15,11 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,5 +31,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
