@@ -14,3 +14,19 @@ TypeScript strict, sem backend. Plano e métodos em `docs/PLANO.md`.
 - Lógica de aprendizado fica em `src/lib/` como funções puras com testes.
 - Preservar acessibilidade (foco visível, teclado, rótulos) e `prefers-reduced-motion`.
 - Evitar dependências novas; se necessárias, explicar no PR.
+
+## Filtro de metodologia (obrigatório para toda ideia nova)
+
+Meta do João: conversar com estrangeiros em qualquer lugar, em ~6 meses, com 1h a 1h30 por dia
+(30 a 40 min offline no metrô). Toda funcionalidade nova precisa servir a pelo menos um destes
+métodos (pesquisa em `docs/PLANO.md`); se não servir, proponha um ajuste ou diga que não recomenda:
+
+1. **Repetição espaçada** (FSRS): rever no momento certo, antes de esquecer.
+2. **Prática de recuperação**: puxar da memória (digitar, falar, completar) vale mais que reconhecer.
+3. **Input compreensível**: muito inglês um pouco acima do nível (histórias, cenas, áudio).
+4. **Produção com correção**: falar e escrever, com feedback (chamada, diário, frases).
+5. **Prática variada e intercalada**: formatos e assuntos misturados.
+
+Regras da gamificação: recompensa só para ações que fazem aprender (esforço vale mais que clique);
+errar nunca é punido; competir só consigo mesmo; nada de mecânica que incentive "passar de fase"
+sem aprender (ex.: chutar alternativas). Na dúvida, prefira o que aumenta a recuperação ativa.

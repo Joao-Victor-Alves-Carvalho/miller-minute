@@ -5,14 +5,18 @@ import { getItem } from '../data/packs';
 import type { Item } from '../data/types';
 import type { Mood } from '../components/Aurora';
 import { Confetti } from '../components/Confetti';
+import { MatchRound } from '../components/MatchRound';
 import { IconBolt, IconCheck, IconMic, IconSpeaker, IconX } from '../components/Icons';
 import { SpeakButton } from '../components/SpeakButton';
 import { checkTyped, matchSpoken } from '../lib/answer';
+import type { WordCheck } from '../lib/compare';
+import { buildPuzzle, checkBuild, checkTranslation, spotPuzzle } from '../lib/exercises';
 import { buildChoices } from '../lib/choices';
 import { explain } from '../lib/explain';
 import { speechSupport, listen, type Listening  } from '../lib/listen';
-import { answerField, clozeParts, isChoice, resolveMode, type Mode } from '../lib/modes';
+import { answerField, clozeParts, isChoice, isSentence, resolveMode, type Mode } from '../lib/modes';
 import {
+  addConfusion,
   capabilities,
   pause,
   pausedMinutes,
@@ -52,6 +56,8 @@ interface Outcome {
   typo: boolean;
   chosen: string | null;
   why: string[];
+  /** Traduza a frase: palavra por palavra do que foi escrito. */
+  check?: WordCheck[];
 }
 
 const GOOD = ['Mandou bem!', 'Isso aí!', 'Perfeito!', 'Boa!', 'Na mosca!', 'Arrasou!'];
@@ -63,6 +69,10 @@ const LABEL: Record<Mode, string> = {
   'listen-choice': 'Ouça e escolha o significado',
   'cloze-choice': 'Complete a frase',
   speak: 'Fale em inglês',
+  'listen-type': 'Ouça e escreva em inglês',
+  build: 'Monte a frase em inglês',
+  'spot-error': 'Ache a palavra errada',
+  translate: 'Traduza a frase',
 };
 
 /** Recalculado a cada uso: sem internet no Android, o microfone sai de cena. */
@@ -79,6 +89,8 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   const [title, setTitle] = useState('');
   const [listening, setListening] = useState(false);
   const [micMsg, setMicMsg] = useState<string | null>(null);
+  // Monte a frase: índices dos blocos escolhidos, na ordem.
+  const [built, setBuilt] = useState<number[]>([]);
   const stats = useRef<Summary>({ answered: 0, correct: 0, bestCombo: 0, newLearned: 0 });
   const retries = useRef(new Map<string, number>());
   const recognition = useRef<Listening | null>(null);
@@ -93,23 +105,43 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   const soundsOn = progress.settings.sounds && audioOn;
 
   // Tipo de pergunta efetivo: troca áudio/microfone quando estão pausados ou indisponíveis.
-  const mode: Mode = useMemo(() => {
-    if (!step || !item) return 'en-pt-choice';
-    return resolveMode(step.mode, item, capabilities(progress, Date.now(), support()));
+  // Os quebra-cabeças de frase são montados aqui (fixos durante o passo); sem peças, volta ao básico.
+  const { mode, build, spot } = useMemo(() => {
+    if (!step || !item) return { mode: 'en-pt-choice' as Mode, build: null, spot: null };
+    const resolved = resolveMode(step.mode, item, capabilities(progress, Date.now(), support()));
+    if (resolved === 'build') {
+      const puzzle = buildPuzzle(item, pool, Math.random);
+      return puzzle ? { mode: resolved, build: puzzle, spot: null } : { mode: 'pt-en-choice' as Mode, build: null, spot: null };
+    }
+    if (resolved === 'spot-error') {
+      const puzzle = spotPuzzle(item, pool, Math.random);
+      return puzzle ? { mode: resolved, build: null, spot: puzzle } : { mode: 'pt-en-choice' as Mode, build: null, spot: null };
+    }
+    return { mode: resolved, build: null, spot: null };
   }, [index, step, item, progress.pauses]);
 
   // Alternativas fixas durante o passo: reagendar um erro muda a fila, mas não o passo atual.
+  // Palavra firme recebe alternativas mais parecidas; o que você já confundiu volta como alternativa.
   const choices = useMemo(() => {
     if (!step || !item || step.kind !== 'quiz' || !isChoice(mode)) return [];
-    return buildChoices(item, pool, Math.random, answerField(mode));
+    return buildChoices(item, pool, Math.random, answerField(mode), 4, {
+      box: progress.cards[item.id]?.box ?? 0,
+      confusedWith: progress.confusions[item.id],
+    });
   }, [index, step, mode]);
+
+  const matchItems = useMemo(
+    () => (step?.kind === 'match' ? (step.group ?? []).map((id) => getItem(id)).filter((i): i is Item => i !== undefined) : []),
+    [index, step],
+  );
+  const sentence = item && isSentence(mode) ? (mode === 'build' && build ? { en: build.sentence, pt: build.prompt } : { en: item.ex ?? item.en, pt: item.exPt ?? item.pt }) : null;
 
   const cloze = item && mode === 'cloze-choice' ? clozeParts(item) : null;
 
   // Áudio automático ao mostrar a pergunta.
   useEffect(() => {
-    if (!item || outcome) return;
-    if (mode === 'listen-choice' && audioOn) speak(item.en);
+    if (!item || outcome || step?.kind === 'match') return;
+    if ((mode === 'listen-choice' || mode === 'listen-type') && audioOn) speak(item.en);
     else if (autoAudio && (step?.kind === 'intro' || mode === 'en-pt-choice')) speak(item.en);
   }, [index, step, mode]);
 
@@ -132,6 +164,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
     setMood('idle');
     setOutcome(null);
     setTyped('');
+    setBuilt([]);
     if (index + 1 >= queue.length) finish();
     else setIndex(index + 1);
   }, [finish, index, queue.length, setMood]);
@@ -143,14 +176,31 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
     advance();
   }, [advance, step, updateProgress]);
 
+  const finishMatch = useCallback(
+    (misses: number) => {
+      // Pares não mexem na revisão espaçada; contam como prática (sem punir as tentativas).
+      stats.current.answered += 1;
+      if (misses === 0) stats.current.correct += 1;
+      updateProgress((p) => recordAnswer(p, Date.now(), misses === 0));
+      advance();
+    },
+    [advance, updateProgress],
+  );
+
   const answer = useCallback(
-    (correct: boolean, chosen: string | null, typo = false) => {
+    (correct: boolean, chosen: string | null, typo = false, check?: WordCheck[]) => {
       if (!step || !item || outcome) return;
       const now = Date.now();
       const before = progress.cards[item.id] ?? newCard(now);
       graded.current = step.graded && correct ? { before, at: now } : null;
       setRating(step.graded && correct ? autoRate(true, typo) : null);
-      updateProgress((p) => {
+      // Guarda a confusão (escolheu/escreveu outra palavra conhecida): ela volta como alternativa.
+      const confusedWith =
+        !correct && chosen && !isSentence(mode)
+          ? pool.find((i) => i.id !== item.id && (isChoice(mode) ? i[answerField(mode)] === chosen : i.en.toLowerCase() === chosen.trim().toLowerCase()))
+          : undefined;
+      updateProgress((p0) => {
+        const p = confusedWith ? addConfusion(p0, item.id, confusedWith.id) : p0;
         const next = recordAnswer(p, now, correct);
         const existing = p.cards[item.id];
         if (step.graded) {
@@ -189,12 +239,13 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
         }
       }
       setMood(correct ? 'correct' : 'wrong');
-      const why = correct ? [] : explain({ item, mode, chosen, pool, notes });
-      setOutcome({ correct, typo, chosen, why });
-      // A pronúncia vem depois do efeito sonoro.
-      if (autoAudio && (answerField(mode) === 'en' || !correct)) setTimeout(() => speak(item.en), soundsOn ? 380 : 0);
+      const why = correct ? [] : explain({ item, mode, chosen: spot && chosen ? (spot.words[Number(chosen)] ?? null) : chosen, pool, notes, swapped: spot?.wrong });
+      setOutcome({ correct, typo, chosen, why, check });
+      // A pronúncia vem depois do efeito sonoro (nas frases, a frase inteira).
+      const say = sentence?.en ?? item.en;
+      if (autoAudio && (answerField(mode) === 'en' || !correct)) setTimeout(() => speak(say), soundsOn ? 380 : 0);
     },
-    [autoAudio, combo, index, item, kind, mode, outcome, pool, progress.cards, setMood, soundsOn, step, updateProgress],
+    [autoAudio, combo, index, item, kind, mode, outcome, pool, progress.cards, sentence, setMood, soundsOn, spot, step, updateProgress],
   );
 
   const rate = (r: Rate) => {
@@ -248,6 +299,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return;
+      if (step?.kind === 'match') return;
       if (step?.kind === 'intro' && e.key === 'Enter') {
         e.preventDefault();
         continueIntro();
@@ -273,6 +325,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   const expected = item[answerField(mode)];
   const preview = outcome?.correct && graded.current ? previewDays(graded.current.before, graded.current.at) : null;
   const promptText = mode === 'en-pt-choice' ? item.en : item.pt;
+  const typing = mode === 'pt-en-type' || mode === 'listen-type' || mode === 'translate';
   const pct = Math.round((index / queue.length) * 100);
 
   const onTypeSubmit = (e: FormEvent) => {
@@ -282,12 +335,69 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
       return;
     }
     if (typed.trim() === '') return;
+    if (mode === 'translate') {
+      const result = checkTranslation(item, typed);
+      if (result) {
+        answer(result.ok, typed, result.ok && result.score < 1, result.words);
+        return;
+      }
+    }
     const result = checkTyped(typed, item.en);
     answer(result !== 'wrong', typed, result === 'typo');
   };
 
+  const submitBuild = () => {
+    if (!build || outcome || built.length === 0) return;
+    const words = built.map((i) => build.tiles[i] ?? '');
+    answer(checkBuild(build.answer, words), words.join(' '));
+  };
+
   const renderPrompt = () => {
-    if (mode === 'listen-choice') {
+    if ((mode === 'build' || mode === 'translate') && sentence) {
+      return (
+        <div>
+          <p className="sentence-prompt">{sentence.pt}</p>
+          {mode === 'translate' && <p className="muted cloze-hint">Use “{item.en}” ({item.pt}).</p>}
+        </div>
+      );
+    }
+    if (mode === 'spot-error' && spot) {
+      return (
+        <div>
+          <div className="spot-words" role="group" aria-label="Toque na palavra errada">
+            {spot.words.map((word, i) => {
+              const isWrong = i === spot.wrongIndex;
+              const isChosen = outcome?.chosen === `${i}`;
+              let cls = 'chip';
+              if (outcome && isWrong) cls += ' is-correct';
+              else if (outcome && isChosen) cls += ' is-wrong';
+              return (
+                <motion.button
+                  key={`${i}-${word}`}
+                  type="button"
+                  className={cls}
+                  disabled={outcome !== null}
+                  onClick={() => answer(isWrong, `${i}`)}
+                  whileTap={outcome ? undefined : { scale: 0.92 }}
+                  animate={outcome && isChosen && !isWrong ? { x: [0, -8, 8, -5, 5, 0] } : { x: 0 }}
+                >
+                  {outcome && isWrong ? (
+                    <>
+                      <s>{spot.wrong}</s>
+                      <span className="fix">{spot.right}</span>
+                    </>
+                  ) : (
+                    word
+                  )}
+                </motion.button>
+              );
+            })}
+          </div>
+          {item.exPt && <p className="muted cloze-hint">{item.exPt}</p>}
+        </div>
+      );
+    }
+    if (mode === 'listen-choice' || mode === 'listen-type') {
       return (
         <div className="listen-box">
           <motion.button
@@ -331,14 +441,71 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   };
 
   const renderAnswerArea = () => {
-    if (mode === 'pt-en-type') {
+    if (mode === 'spot-error') {
+      return !outcome ? (
+        <button type="button" className="link-btn" onClick={() => answer(false, null)} style={{ alignSelf: 'center' }}>
+          Não sei
+        </button>
+      ) : null;
+    }
+    if (mode === 'build' && build) {
+      const ok = outcome?.correct;
+      return (
+        <div className="options">
+          <div className={`built${outcome ? (ok ? ' is-correct' : ' is-wrong') : ''}`} aria-label="Sua frase">
+            {built.length === 0 && <span className="muted">Toque nas palavras na ordem certa</span>}
+            {built.map((tile) => (
+              <motion.button
+                layout
+                key={tile}
+                type="button"
+                className="chip on"
+                disabled={outcome !== null}
+                onClick={() => setBuilt((list) => list.filter((x) => x !== tile))}
+              >
+                {build.tiles[tile]}
+              </motion.button>
+            ))}
+          </div>
+          <div className="bank">
+            {build.tiles.map((word, tile) => {
+              const used = built.includes(tile);
+              return (
+                <motion.button
+                  layout
+                  key={`${tile}-${word}`}
+                  type="button"
+                  className={`chip${used ? ' used' : ''}`}
+                  disabled={used || outcome !== null}
+                  onClick={() => setBuilt((list) => [...list, tile])}
+                  whileTap={{ scale: 0.92 }}
+                >
+                  {word}
+                </motion.button>
+              );
+            })}
+          </div>
+          {!outcome && (
+            <div className="row">
+              <button type="button" className="btn btn-ghost" onClick={() => answer(false, null)}>
+                Não sei
+              </button>
+              <button type="button" className="btn btn-primary" style={{ flex: 1 }} disabled={built.length === 0} onClick={submitBuild}>
+                Verificar
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+    if (typing) {
       return (
         <form onSubmit={onTypeSubmit} className="options">
           <motion.input
             className={`type-input${outcome ? (outcome.correct ? ' is-correct' : ' is-wrong') : ''}`}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            placeholder="Digite aqui…"
+            placeholder={mode === 'translate' ? 'Escreva a frase em inglês…' : mode === 'listen-type' ? 'Escreva o que ouviu…' : 'Digite aqui…'}
             aria-label="Sua resposta em inglês"
             autoFocus
             autoComplete="off"
@@ -358,6 +525,11 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
                 Verificar
               </button>
             </div>
+          )}
+          {mode === 'listen-type' && !outcome && (
+            <button type="button" className="link-btn" onClick={() => pauseKind('audio')} style={{ alignSelf: 'center' }}>
+              Não posso ouvir agora (15 min)
+            </button>
           )}
         </form>
       );
@@ -479,7 +651,9 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
           exit={{ opacity: 0, y: -28, scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 260, damping: 26 }}
         >
-          {step.kind === 'intro' ? (
+          {step.kind === 'match' ? (
+            <MatchRound items={matchItems} audioOn={audioOn} soundsOn={soundsOn} onDone={finishMatch} />
+          ) : step.kind === 'intro' ? (
             <div className="intro-card glass">
               <span className="badge">Nova</span>
               <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -539,10 +713,28 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
                 </motion.span>
                 {title}
               </h3>
-              <p className="answer-line">
-                {item.en} <span className="muted">— {item.pt}</span>
-              </p>
-              {outcome.typo && (
+              {sentence ? (
+                <>
+                  <p className="answer-line">{sentence.en}</p>
+                  <p className="muted" style={{ margin: 0 }}>
+                    {sentence.pt}
+                  </p>
+                  {outcome.check && outcome.check.some((w) => !w.ok) && (
+                    <p className="word-check" aria-label="Palavras que faltaram ou mudaram">
+                      {outcome.check.map((w, i) => (
+                        <span key={`${i}-${w.word}`} className={w.ok ? undefined : 'miss'}>
+                          {w.word}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="answer-line">
+                  {item.en} <span className="muted">— {item.pt}</span>
+                </p>
+              )}
+              {outcome.typo && !sentence && (
                 <p className="muted" style={{ margin: 0 }}>
                   Grafia certa: <strong style={{ color: 'var(--text)' }}>{item.en}</strong>
                 </p>
@@ -573,7 +765,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
                   </p>
                 </div>
               )}
-              {outcome.correct && item.ex && (
+              {outcome.correct && item.ex && !sentence && (
                 <div className="example">
                   <div style={{ flex: 1 }}>
                     <p className="en">{item.ex}</p>

@@ -64,6 +64,8 @@ export interface Progress {
   aiQueue: AiJob[];
   /** Chamadas da Endurance concluídas. */
   calls: { done: number; lastAt: number };
+  /** Confusões do aprendiz: id do item → ids que ele já escolheu no lugar (mais recente primeiro). */
+  confusions: Record<string, string[]>;
 }
 
 export interface AiMistake {
@@ -119,6 +121,7 @@ export function emptyProgress(): Progress {
     custom: [],
     aiQueue: [],
     calls: { done: 0, lastAt: 0 },
+    confusions: {},
   };
 }
 
@@ -315,7 +318,18 @@ export function normalizeProgress(parsed: Partial<Progress>): Progress {
     custom: Array.isArray(parsed.custom) ? parsed.custom : [],
     aiQueue: Array.isArray(parsed.aiQueue) ? parsed.aiQueue : [],
     calls: { ...base.calls, ...parsed.calls },
+    confusions: { ...parsed.confusions },
   };
+}
+
+/** Quantas confusões guardar por item. */
+export const MAX_CONFUSIONS = 5;
+
+/** Registra que `otherId` foi escolhido no lugar de `itemId` (volta como alternativa difícil). */
+export function addConfusion(p: Progress, itemId: string, otherId: string): Progress {
+  if (itemId === otherId) return p;
+  const list = [otherId, ...(p.confusions[itemId] ?? []).filter((id) => id !== otherId)].slice(0, MAX_CONFUSIONS);
+  return { ...p, confusions: { ...p.confusions, [itemId]: list } };
 }
 
 export function loadProgress(): Progress {

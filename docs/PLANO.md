@@ -100,6 +100,29 @@ Etapa B2 (próxima): conteúdo personalizado baixado antes, teste mensal de nív
 corrigidos quando voltar a internet), conteúdo personalizado baixado antes, análise dos áudios
 da cápsula e teste mensal de nível.
 
+## Exercícios variados e alternativas inteligentes (v0.9)
+
+Filtro de metodologia registrado no `CLAUDE.md`: toda ideia nova precisa servir a um dos cinco
+métodos (repetição espaçada, recuperação, input compreensível, produção com correção, prática
+intercalada).
+
+- **Alternativas inteligentes** (`src/lib/choices.ts`, `src/data/topics.ts`): as erradas se
+  parecem com a certa (mesmo tema, pares que confundem como do/make e say/tell, escrita parecida,
+  mesma estrutura de frase). Palavra nova ganha uma alternativa mais tranquila; palavra firme, só
+  parecidas. O que você já escolheu errado volta como alternativa (`progress.confusions`).
+- **Escada de formatos** (`src/lib/modes.ts`), pela caixa do item:
+  - reconhecer (0–1): significado, ouvir e escolher;
+  - lembrar em contexto (2–3): escolher o inglês, completar a lacuna, ouvir, falar,
+    **monte a frase** (blocos com duas palavras a mais) e **ache o erro** (palavra parecida
+    trocada na frase);
+  - produzir (4+): digitar, falar, **ouça e escreva**, **traduza a frase** (aceita 80% das
+    palavras; "it's" e "it is" valem igual) e monte a frase.
+  - Item sem o que o formato precisa (exemplo, lacuna) cai no básico da fase.
+- **Pares relâmpago**: depois das palavras novas, uma rodada de ligar inglês ↔ português.
+  Não mexe na revisão espaçada e errar só pisca o par.
+- Ficaram para depois: "resposta natural" (escolher a resposta certa numa situação) e "frase livre
+  com correção da IA".
+
 ## Próximas fases
 
 1. **Fase 2 — FSRS**: trocar o Leitner pelo FSRS, com botões "difícil / bom / fácil".
