@@ -36,6 +36,8 @@ interface Props {
   /** Palavras novas ainda não vistas nos pacotes liberados. */
   unseenLeft: number;
   onMoreWords: () => void;
+  aiReady: boolean;
+  pendingAi: number;
   onMistakes: () => void;
   onNavigate: (target: NavTarget) => void;
   onFocus: (packId: string | null) => void;
@@ -56,7 +58,7 @@ const enter = (i: number) => ({
 });
 
 export function Home(props: Props) {
-  const { progress, dueCount, newCount, mistakesCount, unlocked, seenWords, onStart, onExtra, unseenLeft, onMoreWords, onMistakes, onNavigate, onFocus, onResume } = props;
+  const { progress, dueCount, newCount, mistakesCount, unlocked, seenWords, onStart, onExtra, unseenLeft, onMoreWords, aiReady, pendingAi, onMistakes, onNavigate, onFocus, onResume } = props;
   const now = Date.now();
   const streak = currentStreak(progress, now);
   const hasWork = dueCount + newCount > 0;
@@ -80,6 +82,8 @@ export function Home(props: Props) {
   };
 
   const tiles: { id: string; emoji: string; title: string; sub: string; onClick: () => void; badge?: number }[] = [
+    { id: 'endurance', emoji: '📞', title: 'Chamada da Endurance', sub: aiReady ? 'Conversa por voz com a IA' : 'Configure em Ajustes', onClick: () => onNavigate('endurance') },
+    { id: 'journal', emoji: '✍️', title: 'Diário e frases', sub: pendingAi > 0 ? `${pendingAi} na fila` : 'Funciona offline', onClick: () => onNavigate('journal'), badge: pendingAi },
     { id: 'situations', emoji: '💬', title: 'Situações reais', sub: `${openSituations} de ${situations.length} liberadas`, onClick: () => onNavigate('situations') },
     { id: 'scenes', emoji: '🎬', title: 'Cenas de filme', sub: `${openScenes} de ${scenes.length} liberadas`, onClick: () => onNavigate('scenes') },
     { id: 'stories', emoji: '📖', title: 'Histórias', sub: `${openStories} de ${stories.length} liberadas`, onClick: () => onNavigate('stories') },

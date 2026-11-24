@@ -88,7 +88,14 @@ Meta combinada: conversar com estrangeiros em qualquer lugar, com 1h a 1h30 por 
   pergunta-base + um extra por mês, guardada no aparelho (IndexedDB); "antes e agora" a partir
   do 2º mês; vídeo opcional no mês 1 e no 6, salvo na galeria. Exportar para guardar cópia.
 
-Etapa B (precisa de chave da API da Anthropic e de um pequeno servidor): Chamada da Endurance
+Etapa B1 (v0.8): servidor `worker/` na Cloudflare com Claude Haiku 5.5 (conversa com
+pensamento desligado e esforço baixo, para ser rápida; relatório e correções com JSON validado
+por schema). Chamada da Endurance (voz do celular + reconhecimento de voz, ou digitando),
+relatório no fim (erros → Caderno de erros e "Minhas frases"; palavras novas → "Minhas frases"),
+Diário e captura de frases com fila offline que sincroniza sozinha quando a internet volta.
+
+Etapa B2 (próxima): conteúdo personalizado baixado antes, teste mensal de nível e análise dos
+áudios da cápsula. Antes, na etapa B: Chamada da Endurance
 (conversa por voz com Claude Haiku 5.5), fila offline (diário e frases capturadas no metrô são
 corrigidos quando voltar a internet), conteúdo personalizado baixado antes, análise dos áudios
 da cápsula e teste mensal de nível.

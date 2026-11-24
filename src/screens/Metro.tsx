@@ -10,7 +10,7 @@ interface Props {
   onBack: () => void;
 }
 
-const EMOJI: Record<MetroStep['activity'], string> = { session: '🧠', story: '📖', ear: '🎧', chat: '💬' };
+const EMOJI: Record<MetroStep['activity'], string> = { session: '🧠', story: '📖', ear: '🎧', chat: '💬', call: '📞' };
 
 export function Metro({ steps, onStep, onBack }: Props) {
   const [checks, setChecks] = useState<OfflineCheck[]>(() => offlineChecks());
