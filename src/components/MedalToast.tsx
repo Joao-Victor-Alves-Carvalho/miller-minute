@@ -1,16 +1,26 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
-import type { Medal } from '../lib/medals';
-import { playComplete } from '../lib/sfx';
+import { playComplete, playFind } from '../lib/sfx';
 import { vibrate } from '../lib/speech';
 
-/** Aviso de medalha nova, um de cada vez, no topo da tela. */
-export function MedalToast({ queue, onDone, sound }: { queue: Medal[]; onDone: () => void; sound: boolean }) {
+/** Um aviso: medalha nova ou achado do hangar. */
+export interface ToastItem {
+  id: string;
+  emoji: string;
+  title: string;
+  desc: string;
+  /** Texto pequeno de cima (padrão: "Nova medalha!"). */
+  label?: string;
+  find?: boolean;
+}
+
+/** Aviso de medalha nova ou achado no hangar, um de cada vez, no topo da tela. */
+export function MedalToast({ queue, onDone, sound }: { queue: ToastItem[]; onDone: () => void; sound: boolean }) {
   const current = queue[0];
 
   useEffect(() => {
     if (!current) return;
-    if (sound) playComplete();
+    if (sound) (current.find ? playFind : playComplete)();
     // O navegador só deixa vibrar depois do primeiro toque na tela.
     if ((navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive) vibrate([30, 40, 30]);
     const timer = setTimeout(onDone, 3600);
@@ -22,7 +32,7 @@ export function MedalToast({ queue, onDone, sound }: { queue: Medal[]; onDone: (
       <AnimatePresence>
         {current && (
           <motion.button
-            key={current.id}
+            key={(current.find ? 'find:' : '') + current.id}
             type="button"
             className="toast"
             onClick={onDone}
@@ -35,7 +45,7 @@ export function MedalToast({ queue, onDone, sound }: { queue: Medal[]; onDone: (
               {current.emoji}
             </motion.span>
             <span>
-              <small>Nova medalha!</small>
+              <small>{current.label ?? 'Nova medalha!'}</small>
               <strong>{current.title}</strong>
               <span className="muted">{current.desc}</span>
             </span>

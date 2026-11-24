@@ -132,11 +132,7 @@ export function Settings({ progress, setProgress, aiConfig, onAiConfig, onBack }
       </div>
 
       <div className="settings-card glass">
-        <p className="eyebrow">Meta diária (Tempo de Miller)</p>
-        <Choice value={s.goalMinutes} options={[5, 10, 15, 20, 30]} suffix="min" onChange={(v) => set({ goalMinutes: v })} />
-        <p className="eyebrow" style={{ marginTop: 10 }}>
-          Palavras novas por dia
-        </p>
+        <p className="eyebrow">Palavras novas por dia</p>
         <Choice value={s.newPerDay} options={[10, 15, 20, 30]} suffix="" onChange={(v) => set({ newPerDay: v })} />
       </div>
 

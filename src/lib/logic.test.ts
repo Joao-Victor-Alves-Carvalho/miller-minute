@@ -157,7 +157,7 @@ describe('sessão', () => {
     const current = queue[1] as Step;
     const next = scheduleRetry(queue, 1, current);
     expect(next).toHaveLength(7);
-    expect(next[5]).toEqual({ ...current, graded: false });
+    expect(next[5]).toEqual({ ...current, graded: false, retry: true });
     expect(scheduleRetry(queue, 5, current)[6]?.itemId).toBe(current.itemId);
   });
 

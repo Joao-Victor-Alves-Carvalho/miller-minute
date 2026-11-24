@@ -149,3 +149,41 @@ export function playComplete(): void {
     { freq: 1047, at: 0.3, dur: 0.4, type: 'triangle', gain: 0.2 },
   ]);
 }
+
+/** Decolagem: ronco subindo. */
+export function playLaunch(): void {
+  play([
+    { freq: 90, to: 260, at: 0, dur: 0.7, type: 'sawtooth', gain: 0.05 },
+    { freq: 180, to: 520, at: 0.05, dur: 0.6, type: 'triangle', gain: 0.08 },
+    { freq: 1040, at: 0.55, dur: 0.25, type: 'sine', gain: 0.06 },
+  ]);
+}
+
+/** Tarefa concluída: dois bipes de painel. */
+export function playTask(): void {
+  play([
+    { freq: 988, at: 0, dur: 0.08, type: 'square', gain: 0.05 },
+    { freq: 1319, at: 0.09, dur: 0.14, type: 'square', gain: 0.05 },
+  ]);
+}
+
+/** Pouso: descida suave e acorde aberto. */
+export function playLanding(): void {
+  play([
+    { freq: 420, to: 160, at: 0, dur: 0.5, type: 'triangle', gain: 0.08 },
+    { freq: 392, at: 0.5, dur: 0.6, type: 'triangle', gain: 0.14 },
+    { freq: 494, at: 0.6, dur: 0.6, type: 'triangle', gain: 0.14 },
+    { freq: 587, at: 0.7, dur: 0.6, type: 'triangle', gain: 0.14 },
+    { freq: 784, at: 0.8, dur: 0.9, type: 'sine', gain: 0.12 },
+  ]);
+}
+
+/** Achado no hangar: brilho de caixa misteriosa. */
+export function playFind(): void {
+  play([
+    { freq: 1568, at: 0, dur: 0.1, type: 'sine', gain: 0.1 },
+    { freq: 2093, at: 0.07, dur: 0.1, type: 'sine', gain: 0.1 },
+    { freq: 2637, at: 0.14, dur: 0.1, type: 'sine', gain: 0.1 },
+    { freq: 3136, at: 0.21, dur: 0.35, type: 'sine', gain: 0.08 },
+  ]);
+}

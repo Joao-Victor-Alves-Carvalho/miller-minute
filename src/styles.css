@@ -92,13 +92,13 @@ input:focus-visible {
 .blob.b1 {
   top: -35vmax;
   left: -25vmax;
-  background: var(--violet);
+  background: var(--blob1, var(--violet));
 }
 
 .blob.b2 {
   top: -20vmax;
   right: -35vmax;
-  background: var(--cyan);
+  background: var(--blob2, var(--cyan));
   opacity: 0.3;
   animation-duration: 28s;
   animation-direction: alternate-reverse;
@@ -107,7 +107,7 @@ input:focus-visible {
 .blob.b3 {
   bottom: -45vmax;
   left: -10vmax;
-  background: #ec4899;
+  background: var(--blob3, #ec4899);
   opacity: 0.22;
   animation-duration: 34s;
 }
@@ -2548,4 +2548,447 @@ input:focus-visible {
   color: var(--bad);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* ---------- Jogo: estrelas, nave, planetas ---------- */
+.starfield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.stars-layer {
+  position: absolute;
+  inset: -100% 0 0 0;
+  background-repeat: repeat;
+  animation: star-fall linear infinite;
+}
+
+.stars-layer.s1 {
+  background-image:
+    radial-gradient(1.5px 1.5px at 20px 30px, #fff, transparent),
+    radial-gradient(1px 1px at 120px 80px, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 200px 160px, #cbd5ff, transparent),
+    radial-gradient(1px 1px at 300px 40px, #fff, transparent),
+    radial-gradient(1px 1px at 60px 220px, #a5f3fc, transparent);
+  background-size: 340px 260px;
+  opacity: 0.55;
+  animation-duration: 18s;
+}
+
+.stars-layer.s2 {
+  background-image:
+    radial-gradient(1px 1px at 50px 60px, #fff, transparent),
+    radial-gradient(1px 1px at 170px 140px, #e9d5ff, transparent),
+    radial-gradient(1px 1px at 260px 10px, #fff, transparent);
+  background-size: 280px 200px;
+  opacity: 0.35;
+  animation-duration: 40s;
+}
+
+@keyframes star-fall {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(50%);
+  }
+}
+
+.warp-burst {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 37px, rgba(182, 255, 92, 0.35) 37px 38px, transparent 38px 91px),
+    repeating-linear-gradient(90deg, transparent 0 63px, rgba(34, 211, 238, 0.3) 63px 64px, transparent 64px 127px);
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+  animation: warp 650ms ease-out forwards;
+}
+
+@keyframes warp {
+  from {
+    opacity: 0.9;
+    transform: translateY(-40%) scaleY(2.2);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(40%) scaleY(1);
+  }
+}
+
+.ship-flame {
+  transform-origin: 20px 31px;
+  animation: flame 180ms ease-in-out infinite alternate;
+}
+
+@keyframes flame {
+  from {
+    transform: scaleY(0.7);
+    opacity: 0.8;
+  }
+  to {
+    transform: scaleY(1.15);
+    opacity: 1;
+  }
+}
+
+.planet-orb {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, #ffffffcc 0 6%, var(--pa) 30%, var(--pb) 78%, #0b0b18 100%);
+  box-shadow: 0 0 28px -4px var(--pa), inset -8px -10px 20px rgba(0, 0, 0, 0.45);
+}
+
+.planet-orb.ring::after {
+  content: '';
+  position: absolute;
+  inset: 38% -22%;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--pb) 70%, white);
+  transform: rotate(-18deg);
+  opacity: 0.7;
+}
+
+.planet-orb.dim {
+  filter: grayscale(0.85) brightness(0.55);
+  box-shadow: none;
+}
+
+/* Trajetória da nave (barra de progresso da sessão) */
+.flight {
+  position: relative;
+  flex: 1;
+  height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.flight-line {
+  position: absolute;
+  left: 4px;
+  right: 30px;
+  height: 4px;
+  border-radius: 99px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 6px, transparent 6px 12px);
+}
+
+.flight-line > div {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--violet), var(--cyan), var(--good));
+}
+
+.flight-ship {
+  position: absolute;
+  top: 50%;
+  margin-left: -4px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+}
+
+.flight-ship svg {
+  transform: rotate(90deg);
+}
+
+.flight-dest {
+  position: absolute;
+  right: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Lista de tarefas */
+.tasks-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  background: var(--surface-strong);
+  border: 1.5px solid var(--border);
+  white-space: nowrap;
+}
+
+.task-panel {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.task-row.done {
+  color: var(--good);
+}
+
+.task-row .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.task-row.done .count {
+  color: var(--good);
+}
+
+.task-bar {
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.task-bar > div {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--good), var(--cyan));
+}
+
+.task-toast {
+  position: fixed;
+  left: 50%;
+  top: 76px;
+  z-index: 30;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 800;
+  background: var(--good);
+  color: var(--good-ink);
+  box-shadow: 0 10px 30px -8px rgba(182, 255, 92, 0.7);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.mission-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.mission-how {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Briefing e pouso */
+.briefing {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  text-align: center;
+  padding-top: 24px;
+}
+
+.briefing h1,
+.landing h1 {
+  margin: 0;
+  font-size: clamp(28px, 8vw, 38px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.briefing .task-panel {
+  width: 100%;
+  text-align: left;
+}
+
+.landing {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  text-align: center;
+}
+
+.landing-scene {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+}
+
+.landing-scene .lander {
+  position: absolute;
+  top: 0;
+  left: 50%;
+}
+
+/* Hangar */
+.hangar-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.hangar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.hangar-item {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 16px 10px;
+  text-align: center;
+  border-radius: 18px;
+  border: 1.5px solid var(--border);
+}
+
+.hangar-item.on {
+  border-color: var(--good);
+  box-shadow: 0 0 0 1px var(--good) inset;
+}
+
+.hangar-item.locked {
+  opacity: 0.55;
+}
+
+.hangar-item small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.theme-swatch {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  filter: blur(0.5px);
+}
+
+.mystery {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  border-radius: 50%;
+  background: var(--surface-strong);
+}
+
+.avatar-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+}
+
+/* Galáxia */
+.galaxy-planet {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.galaxy-planet .row {
+  align-items: center;
+  gap: 14px;
+}
+
+.star-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.star-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px #fff;
+}
+
+.star-dots i.dim {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+  animation: dimming 2.4s ease-in-out infinite;
+}
+
+.star-dots i.mastered {
+  background: var(--good);
+  box-shadow: 0 0 6px var(--good);
+}
+
+.star-dots i.unseen {
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
+@keyframes dimming {
+  50% {
+    background: rgba(255, 255, 255, 0.45);
+  }
+}
+
+.hero-trip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hero-trip .float {
+  animation: float 3.2s ease-in-out infinite;
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stars-layer,
+  .warp-burst,
+  .ship-flame,
+  .hero-trip .float,
+  .star-dots i.dim {
+    animation: none;
+  }
+  .warp-burst {
+    display: none;
+  }
+}
+
+.galaxy-planet.locked {
+  opacity: 0.7;
+}
+
+.sheet.tasks {
+  z-index: 20;
+  background: linear-gradient(180deg, #1b1840, #0b0b1a 60%);
+  box-shadow: 0 -20px 60px -10px rgba(0, 0, 0, 0.85);
+  border-top: 1.5px solid var(--cyan);
+}
+
+.landing .task-panel,
+.briefing .task-panel {
+  text-align: left;
+  justify-items: stretch;
 }

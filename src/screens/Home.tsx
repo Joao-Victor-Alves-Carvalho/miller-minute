@@ -1,35 +1,25 @@
 import { motion } from 'motion/react';
 import type { NavTarget } from '../App';
-import { packs } from '../data/packs';
+import { Astronaut } from '../components/Astronaut';
+import { PlanetOrb } from '../components/PlanetOrb';
+import { Ship } from '../components/Ship';
+import { crewChapters } from '../data/crew';
+import type { Planet } from '../data/galaxy';
 import { scenes } from '../data/scenes';
 import { situations } from '../data/situations';
 import { stories } from '../data/stories';
-import type { Pack } from '../data/types';
-import { IconFlame, IconMic, IconSpeaker } from '../components/Icons';
+import { IconMic, IconSpeaker } from '../components/Icons';
 import { isUnlocked } from '../lib/chat';
 import { capsuleStatus } from '../lib/capsule';
 import { earthYearsIfOnMiller, formatEarth, formatMiller, formatStudy, millerSeconds } from '../lib/miller';
-import {
-  currentStreak,
-  masteredRatio,
-  pausedMinutes,
-  THEME_UNLOCK_SEEN,
-  todayMs,
-  UNLOCK_RATIO,
-  BONUS_STEP,
-  seenRatio,
-  doneToday,
-  type PauseKind,
-  type Progress,
-} from '../lib/progress';
-import { MASTERED_BOX } from '../lib/srs';
+import { cosmetics, owned, type Cosmetic } from '../lib/hangar';
+import { pausedMinutes, todayMs, BONUS_STEP, doneToday, type PauseKind, type Progress } from '../lib/progress';
 
 interface Props {
   progress: Progress;
   dueCount: number;
   newCount: number;
   mistakesCount: number;
-  unlocked: Pack[];
   seenWords: number;
   onStart: () => void;
   onExtra: () => void;
@@ -40,8 +30,13 @@ interface Props {
   pendingAi: number;
   onMistakes: () => void;
   onNavigate: (target: NavTarget) => void;
-  onFocus: (packId: string | null) => void;
   onResume: (kind: PauseKind) => void;
+  /** Para onde vai a próxima viagem. */
+  nextPlanet: Planet;
+  ship: Cosmetic;
+  suit: Cosmetic;
+  /** Revisões vencidas (estrelas apagando). */
+  dimStars: number;
 }
 
 function greeting(): string {
@@ -58,30 +53,27 @@ const enter = (i: number) => ({
 });
 
 export function Home(props: Props) {
-  const { progress, dueCount, newCount, mistakesCount, unlocked, seenWords, onStart, onExtra, unseenLeft, onMoreWords, aiReady, pendingAi, onMistakes, onNavigate, onFocus, onResume } = props;
+  const { progress, dueCount, newCount, mistakesCount, seenWords, onStart, onExtra, unseenLeft, onMoreWords, aiReady, pendingAi, onMistakes, onNavigate, onResume, nextPlanet, ship, suit, dimStars } = props;
   const now = Date.now();
-  const streak = currentStreak(progress, now);
   const hasWork = dueCount + newCount > 0;
   const seenAny = seenWords > 0;
   const micPaused = pausedMinutes(progress, 'mic', now);
   const audioPaused = pausedMinutes(progress, 'audio', now);
   const today = todayMs(progress, now);
-  const goalMs = progress.settings.goalMinutes * 60_000;
-  const goalPct = Math.min(1, today / goalMs);
-  const unlockedIds = new Set(unlocked.map((p) => p.id));
   const openSituations = situations.filter((s) => isUnlocked(s, seenWords)).length;
   const openStories = stories.filter((s) => seenWords >= s.unlockAt).length;
   const openScenes = scenes.filter((s) => isUnlocked(s, seenWords)).length;
-  const focus = progress.settings.focusPack;
   const metroDone = Math.min(3, doneToday(progress, now).length);
   const capsule = capsuleStatus(progress.capsules, now);
-  const corePacks = packs.filter((p) => p.kind === 'core');
-  const prevSeen = (pack: Pack) => {
-    const prev = corePacks[corePacks.indexOf(pack) - 1];
-    return prev ? seenRatio(prev, progress.cards) : 1;
-  };
+  const crewOpen = crewChapters.filter((c) => progress.voyage.trips >= c.unlockAt);
+  const crewNew = crewOpen.filter((c) => !progress.stories[c.id]).length;
+  const found = cosmetics.filter((c) => owned(progress, c)).length;
+  const planetsVisited = Object.keys(progress.voyage.landed).length;
 
   const tiles: { id: string; emoji: string; title: string; sub: string; onClick: () => void; badge?: number }[] = [
+    { id: 'galaxy', emoji: '🌌', title: 'Galáxia', sub: dimStars > 0 ? `${dimStars} estrelas apagando` : `${planetsVisited} ${planetsVisited === 1 ? 'planeta visitado' : 'planetas visitados'}`, onClick: () => onNavigate('galaxy') },
+    { id: 'crew', emoji: '🧑‍🚀', title: 'Diário da tripulação', sub: `Capítulo ${crewOpen.length} de ${crewChapters.length}`, onClick: () => onNavigate('crew'), badge: crewNew },
+    { id: 'hangar', emoji: '🛠️', title: 'Hangar', sub: `${found} de ${cosmetics.length} achados`, onClick: () => onNavigate('hangar') },
     { id: 'endurance', emoji: '📞', title: 'Chamada da Endurance', sub: aiReady ? 'Conversa por voz com a IA' : 'Configure em Ajustes', onClick: () => onNavigate('endurance') },
     { id: 'journal', emoji: '✍️', title: 'Diário e frases', sub: pendingAi > 0 ? `${pendingAi} na fila` : 'Funciona offline', onClick: () => onNavigate('journal'), badge: pendingAi },
     { id: 'situations', emoji: '💬', title: 'Situações reais', sub: `${openSituations} de ${situations.length} liberadas`, onClick: () => onNavigate('situations') },
@@ -116,11 +108,9 @@ export function Home(props: Props) {
           miller <span>minute.</span>
         </h1>
         <span className="spacer" />
-        <span className="pill" title="Dias seguidos estudando">
-          <IconFlame />
-          {streak}
-          <span className="sr-only">dias seguidos</span>
-        </span>
+        <button type="button" className="avatar-btn" onClick={() => onNavigate('hangar')} aria-label="Hangar: naves, trajes e céus">
+          <Astronaut suit={suit} size={34} />
+        </button>
         <button type="button" className="icon-btn" onClick={() => onNavigate('settings')} aria-label="Ajustes">
           <span aria-hidden="true" style={{ fontSize: 20 }}>
             ⚙️
@@ -131,21 +121,21 @@ export function Home(props: Props) {
       <motion.div className="hero glass" {...enter(1)}>
         <div>
           <p className="eyebrow">{greeting()}, João</p>
-          <h2 style={{ marginTop: 10 }}>{hasWork ? 'Bora treinar?' : 'Tudo em dia!'}</h2>
         </div>
-        <div className="stats">
-          <div className="stat">
-            <strong>{dueCount}</strong>
-            <span>revisões</span>
+        <div className="hero-trip">
+          <div className="float">
+            <Ship ship={ship} size={58} />
           </div>
-          <div className="stat">
-            <strong>{newCount}</strong>
-            <span>novas hoje</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p className="eyebrow">{hasWork ? 'Próxima viagem' : 'Céu tranquilo'}</p>
+            <h2 style={{ margin: '6px 0 4px' }}>{hasWork ? nextPlanet.name : 'Tudo aceso!'}</h2>
+            <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+              {hasWork
+                ? [dueCount > 0 ? `🌑 ${dueCount} ${dueCount === 1 ? 'estrela apagando' : 'estrelas apagando'}` : '', newCount > 0 ? `✨ ${newCount} para descobrir` : ''].filter(Boolean).join(' · ')
+                : 'Nenhuma estrela apagando. Explore outro jeito ou descubra mais.'}
+            </p>
           </div>
-          <div className="stat">
-            <strong>{progress.totalAnswers > 0 ? Math.round((progress.totalCorrect / progress.totalAnswers) * 100) : 0}%</strong>
-            <span>acertos</span>
-          </div>
+          {hasWork && <PlanetOrb planet={nextPlanet} size={52} ring />}
         </div>
         {hasWork ? (
           <motion.button
@@ -156,7 +146,7 @@ export function Home(props: Props) {
             animate={{ boxShadow: ['0 10px 40px -10px rgba(139,92,246,.7)', '0 10px 50px -6px rgba(34,211,238,.7)', '0 10px 40px -10px rgba(139,92,246,.7)'] }}
             transition={{ duration: 3, repeat: Infinity }}
           >
-            {seenAny ? 'Começar sessão' : 'Começar do zero'}
+            🚀 {seenAny ? 'Decolar' : 'Primeira decolagem'}
           </motion.button>
         ) : (
           <>
@@ -165,7 +155,7 @@ export function Home(props: Props) {
             </p>
             {unseenLeft > 0 && (
               <motion.button type="button" className="btn btn-primary btn-block" onClick={onMoreWords} whileTap={{ scale: 0.96 }}>
-                ➕ Quero mais palavras (+{Math.min(BONUS_STEP, unseenLeft)})
+                ✨ Descobrir mais palavras (+{Math.min(BONUS_STEP, unseenLeft)})
               </motion.button>
             )}
             <div className="suggest-row" role="group" aria-label="Outras formas de praticar">
@@ -176,7 +166,7 @@ export function Home(props: Props) {
             </div>
             {seenAny && (
               <button type="button" className="btn btn-ghost btn-block" onClick={onExtra}>
-                Treino extra (não conta no agendamento)
+                Voo livre (treino que não mexe nas revisões)
               </button>
             )}
           </>
@@ -185,34 +175,10 @@ export function Home(props: Props) {
 
       <motion.div className="miller glass" {...enter(2)}>
         <div className="row" style={{ alignItems: 'center', gap: 14 }}>
-          <div className="goal-ring" role="img" aria-label={`Meta do dia: ${formatStudy(today)} de ${progress.settings.goalMinutes} min`}>
-            <svg viewBox="0 0 64 64" aria-hidden="true">
-              <circle cx="32" cy="32" r="27" stroke="rgba(255,255,255,.1)" strokeWidth="7" fill="none" />
-              <motion.circle
-                cx="32"
-                cy="32"
-                r="27"
-                stroke="url(#goalGrad)"
-                strokeWidth="7"
-                strokeLinecap="round"
-                fill="none"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: goalPct }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-              />
-              <defs>
-                <linearGradient id="goalGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#8b5cf6" />
-                  <stop offset="1" stopColor="#b6ff5c" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <span>{goalPct >= 1 ? '✓' : `${Math.round(goalPct * 100)}%`}</span>
-          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p className="eyebrow">Tempo de Miller</p>
             <strong className="miller-today">
-              {formatStudy(today)} <span className="muted">de {progress.settings.goalMinutes} min hoje</span>
+              {formatStudy(today)} <span className="muted">a bordo hoje</span>
             </strong>
           </div>
         </div>
@@ -260,68 +226,6 @@ export function Home(props: Props) {
           </motion.button>
         ))}
       </motion.div>
-
-      <motion.p className="eyebrow" style={{ marginTop: 6 }} {...enter(5)}>
-        Pacotes de palavras
-      </motion.p>
-      {packs.map((pack, i) => {
-        const locked = !unlockedIds.has(pack.id);
-        const total = pack.items.length;
-        let learning = 0;
-        let mastered = 0;
-        for (const item of pack.items) {
-          const card = progress.cards[item.id];
-          if (!card) continue;
-          if (card.box >= MASTERED_BOX) mastered++;
-          else learning++;
-        }
-        const ratio = masteredRatio(pack, progress.cards);
-        const focused = focus === pack.id;
-        const lockMsg =
-          pack.kind === 'theme'
-            ? `Libera com ${THEME_UNLOCK_SEEN} palavras vistas (faltam ${Math.max(0, THEME_UNLOCK_SEEN - seenWords)}).`
-            : `Libera quando você tiver visto ${Math.round(UNLOCK_RATIO * 100)}% do pacote anterior (agora: ${Math.round(prevSeen(pack) * 100)}%).`;
-        return (
-          <motion.div key={pack.id} className={`pack glass${locked ? ' locked' : ''}${focused ? ' focused' : ''}`} {...enter(6 + i)}>
-            <div className="row">
-              <div style={{ flex: 1 }}>
-                <p className="eyebrow">{pack.kind === 'theme' ? 'Temático' : `Pacote ${packs.filter((p) => p.kind === 'core').indexOf(pack) + 1}`}</p>
-                <h3>
-                  {locked ? '🔒 ' : ''}
-                  {pack.title}
-                </h3>
-              </div>
-              <strong style={{ fontSize: 22 }}>{Math.round(ratio * 100)}%</strong>
-            </div>
-            <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-              {locked ? lockMsg : `${pack.subtitle} · ${total} itens`}
-            </p>
-            <div className="meter" aria-hidden="true">
-              <motion.span style={{ background: 'var(--good)' }} initial={{ width: 0 }} animate={{ width: `${(mastered / total) * 100}%` }} transition={{ duration: 0.9, delay: 0.3 }} />
-              <motion.span style={{ background: 'var(--violet)' }} initial={{ width: 0 }} animate={{ width: `${(learning / total) * 100}%` }} transition={{ duration: 0.9, delay: 0.4 }} />
-            </div>
-            <div className="legend">
-              <span>
-                <i style={{ background: 'var(--good)' }} />
-                {mastered} dominadas
-              </span>
-              <span>
-                <i style={{ background: 'var(--violet)' }} />
-                {learning} aprendendo
-              </span>
-              <span>
-                <i style={{ background: 'rgba(255,255,255,.15)' }} />
-                {total - mastered - learning} novas
-              </span>
-            </div>
-            {!locked && mastered + learning < total && (
-              <button type="button" className={`focus-btn${focused ? ' on' : ''}`} onClick={() => onFocus(focused ? null : pack.id)} aria-pressed={focused}>
-                {focused ? '🎯 Em foco: as palavras novas vêm daqui · tocar para tirar' : 'Focar as palavras novas neste pacote'}
-              </button>
-            )}
-          </motion.div>
-        );
-      })}
 
       <p className="version">Miller Minute v{__APP_VERSION__}</p>
     </section>
