@@ -2,6 +2,9 @@ import type { Item } from '../data/types';
 import { modeFor, type Mode } from './modes';
 import { isDue, type CardState } from './srs';
 
+/** Pares relâmpago: quantos itens no máximo por rodada (cabe na tela do celular). */
+export const MATCH_SIZE = 5;
+
 export type Rng = () => number;
 
 /**
@@ -9,12 +12,15 @@ export type Rng = () => number;
  * - intro: apresenta um item novo (palavra, tradução, áudio, exemplo).
  * - quiz com graded=true: a primeira pergunta do item na sessão; move a caixa Leitner.
  * - quiz com graded=false: repetição de fixação; não muda a caixa.
+ * - match: "pares relâmpago" com os itens novos da sessão (inglês ↔ português); não muda a caixa.
  */
 export interface Step {
   itemId: string;
-  kind: 'intro' | 'quiz';
+  kind: 'intro' | 'quiz' | 'match';
   graded: boolean;
   mode: Mode;
+  /** Itens da rodada de pares (só em kind 'match'). */
+  group?: string[];
 }
 
 export interface SessionOptions {
@@ -105,6 +111,12 @@ export function buildSession(
     // Sem revisões para espaçar: antecipa a próxima pergunta pendente.
     const first = pending.shift();
     if (first) out.push({ itemId: first.itemId, kind: 'quiz', graded: true, mode: 'en-pt-choice' });
+  }
+
+  // Pares relâmpago: junta os novos de uma vez (rápido, reforça antes da fixação).
+  const matchItems = fresh.slice(0, Math.min(opts.maxNew, MATCH_SIZE));
+  if (matchItems.length >= 3) {
+    out.push({ itemId: matchItems[0]?.id ?? '', kind: 'match', graded: false, mode: 'en-pt-choice', group: matchItems.map((i) => i.id) });
   }
 
   // Rodada de fixação: os itens novos aparecem mais uma vez, já na direção inversa.

@@ -19,15 +19,38 @@ export interface ExplainInput {
   mode: Mode;
   /** O que a pessoa escolheu, digitou ou falou (null se pulou / "não sei"). */
   chosen: string | null;
+  /** "Ache o erro": a palavra que foi trocada na frase. */
+  swapped?: string;
   pool: readonly Item[];
   notes: Readonly<Record<string, string>>;
 }
 
 /** Monta a explicação do erro: qual era a resposta certa e por quê. */
-export function explain({ item, mode, chosen, pool, notes }: ExplainInput): string[] {
+export function explain({ item, mode, chosen, pool, notes, swapped }: ExplainInput): string[] {
   const lines: string[] = [];
   const field = answerField(mode);
   const pos = POS_LABEL[item.pos];
+  const tipFor = (en: string) => notes[en.toLowerCase()];
+
+  // Formatos de frase inteira: mostra a frase certa e o que ela quer dizer.
+  if (mode === 'build' || mode === 'translate') {
+    const sentence = mode === 'build' && item.pos === 'frase' && !item.ex ? { en: item.en, pt: item.pt } : { en: item.ex ?? item.en, pt: item.exPt ?? item.pt };
+    lines.push(`A frase é "${sentence.en}" (${sentence.pt}).`);
+    if (chosen) lines.push(mode === 'build' ? `Você montou "${chosen}".` : `Você escreveu "${chosen}".`);
+    lines.push(`Repare em "${item.en}", que significa "${item.pt}".`);
+    const tip = tipFor(item.en);
+    if (tip) lines.push(tip);
+    return lines;
+  }
+  if (mode === 'spot-error') {
+    if (swapped) lines.push(`A palavra trocada era "${swapped}": o certo é "${item.en}" (${item.pt}).`);
+    if (chosen && swapped && chosen !== swapped) lines.push(`"${chosen}" estava certa na frase.`);
+    const other = swapped ? pool.find((i) => i.en.toLowerCase() === swapped.toLowerCase()) : undefined;
+    if (other) lines.push(`"${other.en}" significa "${other.pt}".`);
+    const tip = tipFor(item.en) ?? (other ? tipFor(other.en) : undefined);
+    if (tip) lines.push(tip);
+    return lines;
+  }
 
   if (field === 'pt') {
     lines.push(
@@ -35,13 +58,15 @@ export function explain({ item, mode, chosen, pool, notes }: ExplainInput): stri
         ? `No áudio foi dito "${item.en}" (${pos}), que significa "${item.pt}".`
         : `"${item.en}" (${pos}) significa "${item.pt}".`,
     );
+  } else if (mode === 'listen-type') {
+    lines.push(`No áudio foi dito "${item.en}" (${pos}), que significa "${item.pt}".`);
   } else {
     lines.push(`"${item.pt}" em inglês é "${item.en}" (${pos}).`);
   }
 
   let other: Item | undefined;
   if (chosen) {
-    if (mode === 'pt-en-type' || mode === 'speak') {
+    if (mode === 'pt-en-type' || mode === 'speak' || mode === 'listen-type') {
       const typed = chosen.trim().toLowerCase();
       other = pool.find((i) => i.id !== item.id && i.en.toLowerCase() === typed);
       const verb = mode === 'speak' ? 'O microfone entendeu' : 'Você escreveu';

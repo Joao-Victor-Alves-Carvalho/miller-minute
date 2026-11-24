@@ -172,7 +172,7 @@ describe('sessão', () => {
 });
 
 describe('alternativas', () => {
-  it('4 opções distintas incluindo a resposta, da mesma classe quando dá', () => {
+  it('4 opções distintas, sempre com a resposta', () => {
     const verbs = pack1.items.filter((i) => i.pos === 'verbo');
     const target = verbs[0] as Item;
     for (let seed = 1; seed < 20; seed++) {
@@ -180,9 +180,35 @@ describe('alternativas', () => {
       expect(choices).toHaveLength(4);
       expect(new Set(choices).size).toBe(4);
       expect(choices).toContain(target.pt);
-      const ptVerbs = new Set(verbs.map((v) => v.pt));
-      expect(choices.every((c) => ptVerbs.has(c))).toBe(true);
     }
+  });
+
+  it('alternativas inteligentes: mesmo tema, confusões conhecidas e frases parecidas', async () => {
+    const { pack2 } = await import('../data/pack2');
+    const pool = [...pack1.items, ...pack2.items];
+    const find = (en: string) => pool.find((i) => i.en === en)!;
+    const ptOf = (en: string) => find(en).pt;
+    // Segunda-feira: as erradas são outros dias da semana.
+    const monday = buildChoices(find('Monday'), pool, seeded(3), 'pt', 4, { box: 3 });
+    const days = ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(ptOf);
+    expect(monday.filter((c) => days.includes(c))).toHaveLength(3);
+    // do × make: a confusão clássica aparece.
+    for (let seed = 1; seed < 8; seed++) expect(buildChoices(find('do'), pool, seeded(seed), 'en', 4, { box: 2 })).toContain('make');
+    // Frase com a mesma estrutura.
+    expect(buildChoices(find('How are you?'), pool, seeded(5), 'en', 4, { box: 2 })).toContain('How old are you?');
+    // As confusões do próprio aprendiz voltam.
+    const coffee = find('coffee');
+    const beach = find('beach');
+    expect(buildChoices(coffee, pool, seeded(9), 'pt', 4, { box: 3, confusedWith: [beach.id] })).toContain(beach.pt);
+  });
+
+  it('palavra nova tem uma alternativa mais tranquila; palavra firme só parecidas', async () => {
+    const { similarity } = await import('./choices');
+    const pool = pack1.items;
+    const target = pool.find((i) => i.en === 'mother')!;
+    const firm = buildChoices(target, pool, seeded(2), 'pt', 4, { box: 4 }).filter((c) => c !== target.pt);
+    const scores = firm.map((c) => similarity(target, pool.find((i) => i.pt === c)!, 'pt'));
+    expect(Math.min(...scores)).toBeGreaterThanOrEqual(5); // todas do tema família
   });
 
   it('completa com outras classes se faltar item da mesma', () => {
