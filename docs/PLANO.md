@@ -123,6 +123,27 @@ intercalada).
 - Ficaram para depois: "resposta natural" (escolher a resposta certa numa situação) e "frase livre
   com correção da IA".
 
+## O jogo (v1.0)
+
+Pedido do João: aprender jogando, sem parecer estudo e sem metas cobrando. Os exercícios
+continuam os mesmos (o filtro de metodologia vale igual); muda a experiência em volta deles.
+
+- **Viagem com tarefas** (`src/lib/voyage.ts`): cada sessão é um voo até um planeta, com uma
+  lista de tarefas a bordo (consertar circuitos = monte a frase, sinal falso = ache o erro,
+  transmissão com ruído = ouça e escreva, diário de bordo = traduza, alinhar motores = pares…).
+  Completar todas leva ao pouso. Errar não falha a tarefa: a palavra só volta depois.
+- **Voo na tela**: a nave anda na trajetória até o planeta, estrelas passam e aceleram no acerto,
+  aviso quando um tipo de tarefa fica completo, sons de decolagem, tarefa e pouso.
+- **Galáxia** (`src/screens/Galaxy.tsx`, `src/lib/galaxy.ts`): cada pacote é um planeta e cada
+  palavra uma estrela. Revisão vencida = estrela apagando; "Reacender" viaja até lá. A repetição
+  espaçada segue igual por baixo, sem contador de pendências cobrando.
+- **Hangar** (`src/lib/hangar.ts`): naves, trajes e céus (cores do fundo) achados como surpresa,
+  sempre por ações que fazem aprender. Só visual; sem loja nem moeda.
+- **Diário da tripulação** (`src/data/crew.ts`): história contínua original em inglês básico
+  (8 capítulos, com áudio, tradução e perguntas), liberada pelas viagens.
+- **Menos placar**: a tela inicial não mostra mais meta diária, sequência nem % de acertos; o pouso
+  não mostra nota. O app continua contando por trás (medalhas e gráfico).
+
 ## Próximas fases
 
 1. **Fase 2 — FSRS**: trocar o Leitner pelo FSRS, com botões "difícil / bom / fácil".

@@ -19,7 +19,7 @@ const minutes = (p: Progress) => p.totalMs / 60000;
 /** Medalhas com o tema de Interestelar. A ordem é a de exibição. */
 export const medals: Medal[] = [
   { id: 'decolagem', emoji: '🚀', title: 'Decolagem', desc: 'Responder a primeira pergunta', earned: (p) => p.totalAnswers > 0 },
-  { id: 'meta', emoji: '🎯', title: 'Missão do dia', desc: 'Bater a meta diária de estudo', earned: (p) => Object.values(p.history).some((d) => (d.ms ?? 0) >= p.settings.goalMinutes * 60000) },
+  { id: 'meta', emoji: '🎯', title: 'Dez minutos a bordo', desc: 'Passar 10 minutos estudando num dia', earned: (p) => Object.values(p.history).some((d) => (d.ms ?? 0) >= 10 * 60000) },
   { id: 'streak3', emoji: '🔥', title: 'Ignição', desc: '3 dias seguidos', earned: (p) => p.bestStreak >= 3 },
   { id: 'streak7', emoji: '🛰️', title: 'Uma semana em órbita', desc: '7 dias seguidos', earned: (p) => p.bestStreak >= 7 },
   { id: 'streak30', emoji: '🌌', title: 'Tripulante da Endurance', desc: '30 dias seguidos', earned: (p) => p.bestStreak >= 30 },

@@ -88,10 +88,8 @@ export function MatchRound({ items, audioOn, soundsOn, onDone }: Props) {
   return (
     <>
       <div className="prompt">
-        <p className="eyebrow">Pares relâmpago</p>
-        <p className="muted" style={{ margin: 0 }}>
-          Toque numa palavra em inglês e no significado dela.
-        </p>
+        <p className="mission-tag">⚙️ Alinhe os motores</p>
+        <p className="mission-how">Pares relâmpago: toque numa palavra em inglês e no significado dela.</p>
       </div>
       <div className="match-grid" role="group" aria-label="Ligue os pares">
         <div className="match-col">{left.map((item, i) => cell('en', item, i))}</div>
@@ -100,7 +98,7 @@ export function MatchRound({ items, audioOn, soundsOn, onDone }: Props) {
       {finished && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'grid', gap: 10 }}>
           <p className="flash" style={{ margin: 0, textAlign: 'center' }}>
-            {misses.current === 0 ? '⚡ Todos os pares de primeira!' : `✅ Pares completos (${misses.current} ${misses.current === 1 ? 'tentativa a mais' : 'tentativas a mais'})`}
+            {misses.current === 0 ? '⚡ Motores alinhados de primeira!' : `✅ Motores alinhados (${misses.current} ${misses.current === 1 ? 'tentativa a mais' : 'tentativas a mais'})`}
           </p>
           <button type="button" className="btn btn-primary btn-block" onClick={() => onDone(misses.current)} autoFocus>
             Continuar

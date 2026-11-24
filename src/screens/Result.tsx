@@ -1,63 +1,68 @@
-import { animate, motion, useMotionValue, useTransform } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import { useEffect } from 'react';
 import { Confetti } from '../components/Confetti';
-import { IconFlame } from '../components/Icons';
+import { PlanetOrb } from '../components/PlanetOrb';
+import { Ship } from '../components/Ship';
+import { TaskList } from '../components/TaskList';
+import type { Planet } from '../data/galaxy';
+import type { Cosmetic } from '../lib/hangar';
 import { earthYearsIfOnMiller, formatEarth, formatMiller, formatStudy, millerSeconds } from '../lib/miller';
-import { playComplete } from '../lib/sfx';
+import { playLanding } from '../lib/sfx';
 import type { Summary } from './Session';
 
-function headline(pct: number): string {
-  if (pct === 100) return 'Impecável!';
-  if (pct >= 80) return 'Excelente!';
-  if (pct >= 60) return 'Bom treino!';
-  return 'Faz parte!';
+interface Props {
+  summary: Summary;
+  ms: number;
+  planet: Planet;
+  ship: Cosmetic;
+  /** Primeira vez neste planeta. */
+  firstLanding: boolean;
+  sound: boolean;
+  onDone: () => void;
 }
 
-export function Result({ summary, ms, streak, sound, onDone }: { summary: Summary; ms: number; streak: number; sound: boolean; onDone: () => void }) {
-  const pct = summary.answered > 0 ? Math.round((summary.correct / summary.answered) * 100) : 0;
-  const value = useMotionValue(0);
-  const dash = useTransform(value, (v) => `${(v / 100) * 565} 565`);
-  const [shown, setShown] = useState(0);
-
+/** Pouso no planeta: fim da viagem, com as tarefas feitas. Sem nota nem sequência na tela. */
+export function Result({ summary, ms, planet, ship, firstLanding, sound, onDone }: Props) {
   useEffect(() => {
-    if (sound) playComplete();
-    // Toca uma vez, ao abrir o resultado.
+    // O som acompanha a nave tocando o chão.
+    if (!sound) return;
+    const t = setTimeout(playLanding, 500);
+    return () => clearTimeout(t);
   }, []);
 
-  useEffect(() => {
-    const controls = animate(value, pct, { duration: 1.2, ease: [0.2, 0.8, 0.2, 1], onUpdate: (v) => setShown(Math.round(v)) });
-    return () => controls.stop();
-  }, [pct, value]);
-
   return (
-    <section className="screen result" aria-label="Resultado da sessão">
-      <motion.div className="ring" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 180, damping: 16 }}>
-        <svg viewBox="0 0 200 200" aria-hidden="true">
-          <defs>
-            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#8b5cf6" />
-              <stop offset="60%" stopColor="#22d3ee" />
-              <stop offset="100%" stopColor="#b6ff5c" />
-            </linearGradient>
-          </defs>
-          <circle cx="100" cy="100" r="90" stroke="rgba(255,255,255,.08)" strokeWidth="16" fill="none" />
-          <motion.circle cx="100" cy="100" r="90" stroke="url(#ringGrad)" strokeWidth="16" strokeLinecap="round" fill="none" style={{ strokeDasharray: dash }} />
-        </svg>
-        <div className="value">{shown}%</div>
+    <section className="screen landing" aria-label={`Pouso em ${planet.name}`}>
+      <div className="landing-scene" aria-hidden="true">
+        <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8 }} style={{ marginTop: 70 }}>
+          <PlanetOrb planet={planet} size={150} ring />
+        </motion.div>
+        <motion.div className="lander" initial={{ y: -40, x: '-50%', opacity: 0 }} animate={{ y: 40, x: '-50%', opacity: 1 }} transition={{ duration: 1, ease: [0.2, 0.8, 0.3, 1] }}>
+          <Ship ship={ship} size={54} />
+        </motion.div>
+      </div>
+
+      <motion.p className="mission-tag" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+        {firstLanding ? '🏁 Primeiro pouso' : '🛬 Pouso concluído'}
+      </motion.p>
+      <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+        Bem-vindo a {planet.name}!
+      </motion.h1>
+      <motion.p className="muted" style={{ margin: 0 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
+        {planet.tagline}.
+      </motion.p>
+
+      <motion.div style={{ width: '100%' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
+        <TaskList lines={summary.tasks} />
       </motion.div>
 
-      <motion.h1 className="result-title" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} style={{ margin: 0, fontSize: 40, fontWeight: 900, letterSpacing: '-0.05em' }}>
-        {headline(pct)}
-      </motion.h1>
-
-      <motion.div className="stats" style={{ width: '100%' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-        <div className="stat">
-          <strong>{summary.correct}/{summary.answered}</strong>
-          <span>acertos</span>
-        </div>
+      <motion.div className="stats" style={{ width: '100%' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 }}>
         <div className="stat">
           <strong>{summary.newLearned}</strong>
-          <span>novas</span>
+          <span>descobertas</span>
+        </div>
+        <div className="stat">
+          <strong>{summary.correct}</strong>
+          <span>acertos</span>
         </div>
         <div className="stat">
           <strong>x{summary.bestCombo}</strong>
@@ -66,21 +71,17 @@ export function Result({ summary, ms, streak, sound, onDone }: { summary: Summar
       </motion.div>
 
       {ms > 0 && (
-        <motion.p className="miller-line result-miller" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
-          🪐 Durante seus <strong>{formatStudy(ms)}</strong> de estudo, passaram só <strong>{formatMiller(millerSeconds(ms))}</strong> no planeta de Miller. Lá, esse tempo valeria{' '}
+        <motion.p className="miller-line result-miller" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}>
+          🪐 Durante seus <strong>{formatStudy(ms)}</strong> de viagem, passaram só <strong>{formatMiller(millerSeconds(ms))}</strong> no planeta de Miller. Lá, esse tempo valeria{' '}
           <strong>{formatEarth(earthYearsIfOnMiller(ms))}</strong> aqui na Terra.
         </motion.p>
       )}
 
-      <motion.p className="pill" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6, type: 'spring' }}>
-        <IconFlame /> {streak} {streak === 1 ? 'dia seguido' : 'dias seguidos'}
-      </motion.p>
-
-      <motion.button type="button" className="btn btn-primary btn-block" onClick={onDone} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.75 }} autoFocus>
-        Voltar ao início
+      <motion.button type="button" className="btn btn-primary btn-block" onClick={onDone} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }} autoFocus>
+        Voltar à nave
       </motion.button>
 
-      <Confetti burst={pct >= 60 ? 1 : 0} amount={60} />
+      <Confetti burst={1} amount={firstLanding ? 90 : 50} />
     </section>
   );
 }

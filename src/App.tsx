@@ -5,8 +5,15 @@ import { scenes } from './data/scenes';
 import { situations } from './data/situations';
 import { stories } from './data/stories';
 import { Aurora, type Mood } from './components/Aurora';
-import { MedalToast } from './components/MedalToast';
-import { awardMedals, type Medal } from './lib/medals';
+import { MedalToast, type ToastItem } from './components/MedalToast';
+import { crewChapters } from './data/crew';
+import { planetFor } from './data/galaxy';
+import { awardFinds, cosmetic } from './lib/hangar';
+import { destinationOf } from './lib/voyage';
+import { Crew } from './screens/Crew';
+import { Galaxy } from './screens/Galaxy';
+import { Hangar } from './screens/Hangar';
+import { awardMedals } from './lib/medals';
 import { tick } from './lib/miller';
 import { modeFor } from './lib/modes';
 import {
@@ -14,7 +21,6 @@ import {
   completeEar,
   completeSituation,
   completeStory,
-  currentStreak,
   loadProgress,
   newAllowedToday,
   orderByFocus,
@@ -23,6 +29,7 @@ import {
   addCustomItems,
   markActivity,
   addBonusNew,
+  finishVoyage,
   BONUS_STEP,
   resume,
   saveProgress,
@@ -51,14 +58,17 @@ import { canSpeak } from './lib/speech';
 
 type Screen =
   | { name: 'home' }
-  | { name: 'session'; steps: Step[]; key: number; kind: SessionKind }
-  | { name: 'result'; summary: Summary; ms: number }
+  | { name: 'session'; steps: Step[]; key: number; kind: SessionKind; planetId: string }
+  | { name: 'result'; summary: Summary; ms: number; planetId: string; firstLanding: boolean }
   | { name: 'words' }
   | { name: 'situations' }
   | { name: 'scenes' }
   | { name: 'chat'; id: string; key: number; from: 'situations' | 'scenes' }
   | { name: 'stories' }
-  | { name: 'story'; id: string; key: number }
+  | { name: 'story'; id: string; key: number; from: 'stories' | 'crew' }
+  | { name: 'galaxy' }
+  | { name: 'hangar' }
+  | { name: 'crew' }
   | { name: 'ear' }
   | { name: 'progress' }
   | { name: 'settings' }
@@ -67,7 +77,7 @@ type Screen =
   | { name: 'endurance' }
   | { name: 'journal' };
 
-export type NavTarget = 'words' | 'situations' | 'scenes' | 'stories' | 'ear' | 'progress' | 'settings' | 'metro' | 'capsule' | 'endurance' | 'journal';
+export type NavTarget = 'galaxy' | 'hangar' | 'crew' | 'words' | 'situations' | 'scenes' | 'stories' | 'ear' | 'progress' | 'settings' | 'metro' | 'capsule' | 'endurance' | 'journal';
 
 /** Telas em que o relógio de estudo (Tempo de Miller) conta. */
 const STUDY_SCREENS = new Set<Screen['name']>(['session', 'chat', 'story', 'ear', 'endurance', 'journal']);
@@ -76,7 +86,7 @@ export function App() {
   const [progress, setProgress] = useState<Progress>(loadProgress);
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [mood, setMood] = useState<Mood>('idle');
-  const [toasts, setToasts] = useState<Medal[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const lastTouch = useRef<number | null>(null);
   const sessionStartMs = useRef(0);
 
@@ -129,10 +139,16 @@ export function App() {
 
   // Medalhas: confere a cada mudança no progresso e avisa as novas.
   useEffect(() => {
-    const { progress: next, awarded } = awardMedals(progress, Date.now());
-    if (awarded.length > 0) {
+    const now = Date.now();
+    const { progress: withMedals, awarded } = awardMedals(progress, now);
+    const { progress: next, found } = awardFinds(withMedals, now);
+    if (awarded.length > 0 || found.length > 0) {
       setProgress(next);
-      setToasts((t) => [...t, ...awarded]);
+      setToasts((t) => [
+        ...t,
+        ...awarded,
+        ...found.map((c) => ({ id: c.id, emoji: c.emoji, title: c.name, desc: 'Já está no seu hangar. Toque no capacete para usar.', label: 'Você encontrou!', find: true })),
+      ]);
     }
   }, [progress]);
 
@@ -169,10 +185,33 @@ export function App() {
 
   const seenWords = Object.keys(progress.cards).length;
 
+  const allPacks = useMemo(() => [...packs, minePack(progress.custom)], [progress.custom]);
+  const planetOf = (id: string) => planetFor(allPacks.find((p) => p.id === id) ?? { id, title: id });
+  const ship = cosmetic(progress.hangar.ship, 'ship');
+
   const openSession = (steps: Step[], kind: SessionKind) => {
+    if (steps.length === 0) return;
     sessionStartMs.current = progress.totalMs;
-    setScreen({ name: 'session', steps, key: Date.now(), kind });
+    const planetId = destinationOf(steps.filter((s) => s.kind !== 'match').map((s) => s.itemId));
+    setScreen({ name: 'session', steps, key: Date.now(), kind, planetId });
   };
+
+  /** Viagem a um planeta da galáxia: reacende as estrelas apagando e descobre palavras de lá. */
+  const explorePlanet = (packId: string) => {
+    const due = plan.due.filter((i) => i.id.startsWith(`${packId}:`));
+    const fresh = plan.unseen.filter((i) => i.id.startsWith(`${packId}:`)).slice(0, Math.min(plan.newCount, DEFAULT_SESSION.maxNew));
+    if (due.length + fresh.length === 0) {
+      // Sem novas liberadas hoje: treina as palavras que já conhece de lá.
+      const known = plan.pool.filter((i) => i.id.startsWith(`${packId}:`) && progress.cards[i.id]);
+      openSession(quizSteps(shuffle(known, Math.random).slice(0, 12)), 'extra');
+      return;
+    }
+    openSession(buildSession(due, fresh, progress.cards, Math.random), 'normal');
+  };
+
+  const nextPlanet = planetOf(
+    destinationOf([...plan.due.slice(0, DEFAULT_SESSION.maxReviews), ...plan.unseen.slice(0, Math.min(plan.newCount, DEFAULT_SESSION.maxNew))].map((i) => i.id)),
+  );
 
   const start = () => {
     const fresh = plan.unseen.slice(0, Math.min(plan.newCount, DEFAULT_SESSION.maxNew));
@@ -202,8 +241,14 @@ export function App() {
   const startMistakes = () => openSession(quizSteps(plan.mistakes.slice(0, 15)), 'mistakes');
 
   const finish = (summary: Summary) => {
-    setProgress((p) => ({ ...markActivity(registerStudyDay(p, Date.now()), Date.now(), 'session'), bestCombo: Math.max(p.bestCombo, summary.bestCombo) }));
-    setScreen({ name: 'result', summary, ms: Math.max(0, progress.totalMs - sessionStartMs.current) });
+    const planetId = screen.name === 'session' ? screen.planetId : 'p1';
+    const firstLanding = !progress.voyage.landed[planetId];
+    setProgress((p) => {
+      const now = Date.now();
+      const done = markActivity(registerStudyDay(p, now), now, 'session');
+      return { ...finishVoyage(done, planetId, summary.tasks, now), bestCombo: Math.max(p.bestCombo, summary.bestCombo) };
+    });
+    setScreen({ name: 'result', summary, ms: Math.max(0, progress.totalMs - sessionStartMs.current), planetId, firstLanding });
   };
 
   // Dentro da Missão do metrô, "voltar" das atividades retorna para a missão.
@@ -227,7 +272,7 @@ export function App() {
       else if (plan.unseen.length > 0) moreWords();
       else startExtra();
     } else if (step.activity === 'story' && step.targetId) {
-      setScreen({ name: 'story', id: step.targetId, key: Date.now() });
+      setScreen({ name: 'story', id: step.targetId, key: Date.now(), from: 'stories' });
     } else if (step.activity === 'chat' && step.targetId) {
       const from = scenes.some((x) => x.id === step.targetId) ? 'scenes' : 'situations';
       setScreen({ name: 'chat', id: step.targetId, key: Date.now(), from });
@@ -242,12 +287,13 @@ export function App() {
   };
   const soundOn = progress.settings.sounds && pausedMinutes(progress, 'audio', Date.now()) === 0;
   const chatSituation = screen.name === 'chat' ? [...situations, ...scenes].find((s) => s.id === screen.id) : undefined;
-  const story = screen.name === 'story' ? stories.find((s) => s.id === screen.id) : undefined;
+  const story = screen.name === 'story' ? [...stories, ...crewChapters].find((s) => s.id === screen.id) : undefined;
+  const theme = cosmetic(progress.hangar.theme, 'theme');
   const screenKey = 'key' in screen ? `${screen.name}-${screen.key}` : screen.name;
 
   return (
     <>
-      <Aurora mood={mood} />
+      <Aurora mood={mood} colors={theme.colors} />
       <main className="app">
         <AnimatePresence mode="wait">
           <motion.div
@@ -264,7 +310,6 @@ export function App() {
                 dueCount={plan.due.length}
                 newCount={plan.newCount}
                 mistakesCount={plan.mistakes.length}
-                unlocked={plan.unlocked}
                 seenWords={seenWords}
                 onStart={start}
                 onExtra={startExtra}
@@ -274,8 +319,11 @@ export function App() {
                 pendingAi={pendingCount}
                 onMistakes={startMistakes}
                 onNavigate={navigate}
-                onFocus={(id) => setProgress((p) => ({ ...p, settings: { ...p.settings, focusPack: id } }))}
                 onResume={(kind) => setProgress((p) => resume(p, kind))}
+                nextPlanet={nextPlanet}
+                ship={ship}
+                suit={cosmetic(progress.hangar.suit, 'suit')}
+                dimStars={plan.due.length}
               />
             )}
             {screen.name === 'session' && (
@@ -288,13 +336,17 @@ export function App() {
                 setMood={setMood}
                 onFinish={finish}
                 onExit={goHome}
+                planet={planetOf(screen.planetId)}
+                ship={ship}
               />
             )}
             {screen.name === 'result' && (
               <Result
                 summary={screen.summary}
                 ms={screen.ms}
-                streak={currentStreak(progress, Date.now())}
+                planet={planetOf(screen.planetId)}
+                ship={ship}
+                firstLanding={screen.firstLanding}
                 sound={soundOn}
                 onDone={goHome}
               />
@@ -335,7 +387,7 @@ export function App() {
               <Stories
                 progress={progress}
                 seenWords={seenWords}
-                onOpen={(id) => setScreen({ name: 'story', id, key: Date.now() })}
+                onOpen={(id) => setScreen({ name: 'story', id, key: Date.now(), from: 'stories' })}
                 onBack={goHome}
               />
             )}
@@ -344,7 +396,7 @@ export function App() {
                 story={story}
                 progress={progress}
                 onComplete={(score) => setProgress((p) => completeStory(p, story.id, score, Date.now()))}
-                onBack={() => setScreen(inMetro ? { name: 'metro' } : { name: 'stories' })}
+                onBack={() => setScreen(inMetro ? { name: 'metro' } : screen.from === 'crew' ? { name: 'crew' } : { name: 'stories' })}
               />
             )}
             {screen.name === 'ear' && (
@@ -404,6 +456,19 @@ export function App() {
               />
             )}
             {screen.name === 'metro' && <Metro steps={metroSteps} onStep={runMetroStep} onBack={leaveMetro} />}
+            {screen.name === 'galaxy' && (
+              <Galaxy
+                packs={allPacks.filter((p) => p.items.length > 0)}
+                progress={progress}
+                unlockedIds={new Set(plan.unlocked.map((p) => p.id))}
+                seenWords={seenWords}
+                onExplore={explorePlanet}
+                onFocus={(id) => setProgress((p) => ({ ...p, settings: { ...p.settings, focusPack: id } }))}
+                onBack={goHome}
+              />
+            )}
+            {screen.name === 'hangar' && <Hangar progress={progress} setProgress={setProgress} onBack={goHome} />}
+            {screen.name === 'crew' && <Crew progress={progress} onOpen={(id) => setScreen({ name: 'story', id, key: Date.now(), from: 'crew' })} onBack={goHome} />}
             {screen.name === 'capsule' && <Capsule progress={progress} setProgress={setProgress} onBack={goHome} />}
           </motion.div>
         </AnimatePresence>

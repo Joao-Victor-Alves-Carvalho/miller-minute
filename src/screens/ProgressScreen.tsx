@@ -20,7 +20,7 @@ function StudyChart({ progress }: { progress: Progress }) {
     const h = progress.history[dayKey(t)];
     return { t, minutes: (h?.ms ?? 0) / 60000, answers: h?.answers ?? 0, correct: h?.correct ?? 0 };
   });
-  const max = Math.max(progress.settings.goalMinutes, ...days.map((d) => d.minutes));
+  const max = Math.max(5, ...days.map((d) => d.minutes));
   const top = Math.ceil(max / 5) * 5;
   const W = 340;
   const H = 150;
@@ -31,7 +31,6 @@ function StudyChart({ progress }: { progress: Progress }) {
   const slot = plotW / DAYS;
   const barW = slot - 2; // 2px de espaço entre barras
   const y = (m: number) => 8 + plotH - (m / top) * plotH;
-  const goalY = y(progress.settings.goalMinutes);
   const shown = active ?? DAYS - 1;
   const d = days[shown];
 
@@ -39,7 +38,7 @@ function StudyChart({ progress }: { progress: Progress }) {
     <figure className="chart glass">
       <figcaption>
         <strong>Minutos de estudo por dia</strong>
-        <span className="muted">últimos 14 dias · linha tracejada = meta de {progress.settings.goalMinutes} min</span>
+        <span className="muted">últimos 14 dias</span>
       </figcaption>
       <div className="chart-tip" aria-live="polite">
         {d && (
@@ -60,7 +59,6 @@ function StudyChart({ progress }: { progress: Progress }) {
             </text>
           </g>
         ))}
-        <line x1={padL} x2={W} y1={goalY} y2={goalY} className="goal-line" />
         {days.map((day, i) => {
           const x = padL + i * slot + 1;
           const h = Math.max(0, y(0) - y(day.minutes));

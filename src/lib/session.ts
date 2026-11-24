@@ -21,6 +21,8 @@ export interface Step {
   mode: Mode;
   /** Itens da rodada de pares (só em kind 'match'). */
   group?: string[];
+  /** Repetição depois de um erro (não conta como tarefa nova da viagem). */
+  retry?: boolean;
 }
 
 export interface SessionOptions {
@@ -134,7 +136,7 @@ export const RETRY_GAP = 3;
 export const MAX_RETRIES_PER_ITEM = 3;
 
 export function scheduleRetry(queue: readonly Step[], index: number, step: Step): Step[] {
-  const retry: Step = { ...step, graded: false };
+  const retry: Step = { ...step, graded: false, retry: true };
   const at = Math.min(queue.length, index + 1 + RETRY_GAP);
   return [...queue.slice(0, at), retry, ...queue.slice(at)];
 }

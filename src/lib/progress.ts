@@ -1,3 +1,4 @@
+import type { TaskKind } from './voyage';
 import type { Item, Pack } from '../data/types';
 import type { SituationRecord } from './chat';
 import { DAY, dayKey, isMastered, startOfDay, type CardState } from './srs';
@@ -66,6 +67,10 @@ export interface Progress {
   calls: { done: number; lastAt: number };
   /** Confusões do aprendiz: id do item → ids que ele já escolheu no lugar (mais recente primeiro). */
   confusions: Record<string, string[]>;
+  /** Viagens: quantas, tarefas feitas por tipo e primeiro pouso em cada planeta (id → ms). */
+  voyage: { trips: number; tasks: Partial<Record<TaskKind, number>>; landed: Record<string, number> };
+  /** Hangar: achados (id → quando) e o que está em uso. */
+  hangar: { found: Record<string, number>; ship: string; suit: string; theme: string };
 }
 
 export interface AiMistake {
@@ -122,6 +127,8 @@ export function emptyProgress(): Progress {
     aiQueue: [],
     calls: { done: 0, lastAt: 0 },
     confusions: {},
+    voyage: { trips: 0, tasks: {}, landed: {} },
+    hangar: { found: {}, ship: 'endurance', suit: 'classico', theme: 'espaco' },
   };
 }
 
@@ -319,7 +326,17 @@ export function normalizeProgress(parsed: Partial<Progress>): Progress {
     aiQueue: Array.isArray(parsed.aiQueue) ? parsed.aiQueue : [],
     calls: { ...base.calls, ...parsed.calls },
     confusions: { ...parsed.confusions },
+    voyage: { ...base.voyage, ...parsed.voyage, tasks: { ...parsed.voyage?.tasks }, landed: { ...parsed.voyage?.landed } },
+    hangar: { ...base.hangar, ...parsed.hangar, found: { ...parsed.hangar?.found } },
   };
+}
+
+/** Fim de uma viagem: soma as tarefas feitas e registra o pouso no planeta. */
+export function finishVoyage(p: Progress, planetId: string, tasks: readonly { kind: TaskKind; done: number }[], now: number): Progress {
+  const sum = { ...p.voyage.tasks };
+  for (const t of tasks) if (t.done > 0) sum[t.kind] = (sum[t.kind] ?? 0) + t.done;
+  const landed = p.voyage.landed[planetId] ? p.voyage.landed : { ...p.voyage.landed, [planetId]: now };
+  return { ...p, voyage: { trips: p.voyage.trips + 1, tasks: sum, landed } };
 }
 
 /** Quantas confusões guardar por item. */

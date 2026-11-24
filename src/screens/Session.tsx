@@ -6,6 +6,13 @@ import type { Item } from '../data/types';
 import type { Mood } from '../components/Aurora';
 import { Confetti } from '../components/Confetti';
 import { MatchRound } from '../components/MatchRound';
+import { PlanetOrb } from '../components/PlanetOrb';
+import { Ship } from '../components/Ship';
+import { Starfield } from '../components/Starfield';
+import { TaskList } from '../components/TaskList';
+import type { Planet } from '../data/galaxy';
+import type { Cosmetic } from '../lib/hangar';
+import { planTasks, TASKS, taskOf, tasksDone, tickTask, type TaskKind, type TaskLine } from '../lib/voyage';
 import { IconBolt, IconCheck, IconMic, IconSpeaker, IconX } from '../components/Icons';
 import { SpeakButton } from '../components/SpeakButton';
 import { checkTyped, matchSpoken } from '../lib/answer';
@@ -26,7 +33,7 @@ import {
   type Progress,
 } from '../lib/progress';
 import { MAX_RETRIES_PER_ITEM, scheduleRetry, type Step } from '../lib/session';
-import { playCorrect, playWrong } from '../lib/sfx';
+import { playCorrect, playLaunch, playTask, playWrong } from '../lib/sfx';
 import { canSpeak, speak, vibrate } from '../lib/speech';
 import { autoRate, grade, newCard, previewDays, type CardState, type Rate } from '../lib/srs';
 
@@ -35,6 +42,8 @@ export interface Summary {
   correct: number;
   bestCombo: number;
   newLearned: number;
+  /** Tarefas da viagem (para o pouso). */
+  tasks: TaskLine[];
 }
 
 /** normal: sessão do dia; extra: treino sem agendamento; mistakes: caderno de erros. */
@@ -49,6 +58,9 @@ interface Props {
   setMood: (mood: Mood) => void;
   onFinish: (summary: Summary) => void;
   onExit: () => void;
+  /** Destino da viagem e nave em uso. */
+  planet: Planet;
+  ship: Cosmetic;
 }
 
 interface Outcome {
@@ -79,7 +91,7 @@ const LABEL: Record<Mode, string> = {
 const support = () => speechSupport(canSpeak());
 const pick = (list: readonly string[]) => list[Math.floor(Math.random() * list.length)] ?? '';
 
-export function Session({ steps, kind, pool, progress, updateProgress, setMood, onFinish, onExit }: Props) {
+export function Session({ steps, kind, pool, progress, updateProgress, setMood, onFinish, onExit, planet, ship }: Props) {
   const [queue, setQueue] = useState(steps);
   const [index, setIndex] = useState(0);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -91,7 +103,22 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   const [micMsg, setMicMsg] = useState<string | null>(null);
   // Monte a frase: índices dos blocos escolhidos, na ordem.
   const [built, setBuilt] = useState<number[]>([]);
-  const stats = useRef<Summary>({ answered: 0, correct: 0, bestCombo: 0, newLearned: 0 });
+  const stats = useRef<Omit<Summary, 'tasks'>>({ answered: 0, correct: 0, bestCombo: 0, newLearned: 0 });
+  // Viagem: tarefas planejadas com os recursos (áudio/microfone) do começo da sessão.
+  const startCaps = useRef(capabilities(progress, Date.now(), support()));
+  const plannedTask = useCallback((s: Step): TaskKind => {
+    const it = getItem(s.itemId);
+    return taskOf(s, it && s.kind === 'quiz' ? resolveMode(s.mode, it, startCaps.current) : s.mode);
+  }, []);
+  const [tasks, setTasks] = useState<TaskLine[]>(() => planTasks(steps, (s) => {
+    const it = getItem(s.itemId);
+    return it && s.kind === 'quiz' ? resolveMode(s.mode, it, startCaps.current) : s.mode;
+  }));
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const [briefed, setBriefed] = useState(false);
+  const [showTasks, setShowTasks] = useState(false);
+  const [taskToast, setTaskToast] = useState<{ id: number; text: string } | null>(null);
   const retries = useRef(new Map<string, number>());
   const recognition = useRef<Listening | null>(null);
   // Nota do FSRS: estado do cartão antes da resposta, para reavaliar se a pessoa trocar a nota.
@@ -140,10 +167,10 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
 
   // Áudio automático ao mostrar a pergunta.
   useEffect(() => {
-    if (!item || outcome || step?.kind === 'match') return;
+    if (!briefed || !item || outcome || step?.kind === 'match') return;
     if ((mode === 'listen-choice' || mode === 'listen-type') && audioOn) speak(item.en);
     else if (autoAudio && (step?.kind === 'intro' || mode === 'en-pt-choice')) speak(item.en);
-  }, [index, step, mode]);
+  }, [index, step, mode, briefed]);
 
   // Para o microfone ao trocar de passo ou sair.
   useEffect(() => {
@@ -157,8 +184,36 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
 
   const finish = useCallback(() => {
     setMood('idle');
-    onFinish({ ...stats.current });
+    onFinish({ ...stats.current, tasks: tasksRef.current });
   }, [onFinish, setMood]);
+
+  /** Marca a tarefa do passo atual (repetições não contam). Avisa quando um tipo fica completo. */
+  const tick = useCallback(
+    (s: Step) => {
+      if (s.retry) return;
+      const kindOf = plannedTask(s);
+      const { lines, finished } = tickTask(tasksRef.current, kindOf);
+      tasksRef.current = lines;
+      setTasks(lines);
+      if (finished) {
+        setTaskToast({ id: Date.now(), text: `${TASKS[kindOf].emoji} ${TASKS[kindOf].done}` });
+        if (soundsOn) setTimeout(playTask, 450);
+      }
+    },
+    [plannedTask, soundsOn],
+  );
+
+  useEffect(() => {
+    if (!taskToast) return;
+    const t = setTimeout(() => setTaskToast(null), 1800);
+    return () => clearTimeout(t);
+  }, [taskToast]);
+
+  const launch = () => {
+    setBriefed(true);
+    if (soundsOn) playLaunch();
+    vibrate(40);
+  };
 
   const advance = useCallback(() => {
     setMood('idle');
@@ -172,9 +227,10 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   const continueIntro = useCallback(() => {
     if (!step) return;
     stats.current.newLearned += 1;
+    tick(step);
     updateProgress((p) => registerNewItems(p, Date.now(), 1));
     advance();
-  }, [advance, step, updateProgress]);
+  }, [advance, step, tick, updateProgress]);
 
   const finishMatch = useCallback(
     (misses: number) => {
@@ -182,9 +238,10 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
       stats.current.answered += 1;
       if (misses === 0) stats.current.correct += 1;
       updateProgress((p) => recordAnswer(p, Date.now(), misses === 0));
+      if (step) tick(step);
       advance();
     },
-    [advance, updateProgress],
+    [advance, step, tick, updateProgress],
   );
 
   const answer = useCallback(
@@ -218,6 +275,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
       });
 
       stats.current.answered += 1;
+      tick(step);
       if (correct) {
         stats.current.correct += 1;
         const nextCombo = combo + 1;
@@ -245,7 +303,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
       const say = sentence?.en ?? item.en;
       if (autoAudio && (answerField(mode) === 'en' || !correct)) setTimeout(() => speak(say), soundsOn ? 380 : 0);
     },
-    [autoAudio, combo, index, item, kind, mode, outcome, pool, progress.cards, sentence, setMood, soundsOn, spot, step, updateProgress],
+    [autoAudio, combo, index, item, kind, mode, outcome, pool, progress.cards, sentence, setMood, soundsOn, spot, step, tick, updateProgress],
   );
 
   const rate = (r: Rate) => {
@@ -299,7 +357,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return;
-      if (step?.kind === 'match') return;
+      if (!briefed || showTasks || step?.kind === 'match') return;
       if (step?.kind === 'intro' && e.key === 'Enter') {
         e.preventDefault();
         continueIntro();
@@ -318,7 +376,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [advance, answer, choices, continueIntro, item, mode, outcome, step]);
+  }, [advance, answer, choices, continueIntro, item, mode, outcome, step, briefed, showTasks]);
 
   if (!step || !item) return null;
 
@@ -621,9 +679,26 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
         <button type="button" className="icon-btn" onClick={onExit} aria-label="Sair da sessão">
           <IconX />
         </button>
-        <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso da sessão">
-          <motion.div initial={false} animate={{ width: `${Math.max(4, pct)}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }} />
+        <div className="flight" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Viagem até ${planet.name}`}>
+          <div className="flight-line">
+            <motion.div initial={false} animate={{ width: `${pct}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }} />
+          </div>
+          <motion.div className="flight-ship" initial={false} animate={{ left: `calc(${pct / 100} * (100% - 34px) + 4px)` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}>
+            <motion.div
+              key={`${burst}-${outcome?.correct === false ? index : ''}`}
+              animate={outcome?.correct === false ? { rotate: [0, -14, 12, -6, 0] } : { x: [0, 6, 0] }}
+              transition={{ duration: 0.45 }}
+            >
+              <Ship ship={ship} size={30} />
+            </motion.div>
+          </motion.div>
+          <span className="flight-dest">
+            <PlanetOrb planet={planet} size={24} />
+          </span>
         </div>
+        <button type="button" className="tasks-btn" onClick={() => setShowTasks(true)} aria-label={`Tarefas: ${tasksDone(tasks).done} de ${tasksDone(tasks).total}`}>
+          📋 {tasksDone(tasks).done}/{tasksDone(tasks).total}
+        </button>
         <div className="combo" aria-live="polite">
           <AnimatePresence>
             {combo >= 2 && (
@@ -642,7 +717,24 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
+      {!briefed && (
+        <motion.div className="briefing" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <p className="mission-tag">🚀 Nova viagem</p>
+          <motion.div initial={{ scale: 0.6, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 160, damping: 14 }}>
+            <PlanetOrb planet={planet} size={110} ring />
+          </motion.div>
+          <h1>Destino: {planet.name}</h1>
+          <p className="muted" style={{ margin: 0 }}>
+            {planet.tagline}. Complete as tarefas a bordo para pousar.
+          </p>
+          <TaskList lines={tasks} />
+          <motion.button type="button" className="btn btn-primary btn-block" onClick={launch} whileTap={{ scale: 0.96 }} autoFocus>
+            Decolar
+          </motion.button>
+        </motion.div>
+      )}
+
+      {briefed && <AnimatePresence mode="wait">
         <motion.div
           key={`${index}-${step.itemId}-${mode}`}
           className="stage"
@@ -655,7 +747,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
             <MatchRound items={matchItems} audioOn={audioOn} soundsOn={soundsOn} onDone={finishMatch} />
           ) : step.kind === 'intro' ? (
             <div className="intro-card glass">
-              <span className="badge">Nova</span>
+              <span className="badge">✨ Descoberta</span>
               <div className="row" style={{ alignItems: 'flex-start' }}>
                 <h1 className={item.en.length > 14 ? 'prompt-word small' : 'prompt-word'} style={{ flex: 1 }}>
                   {item.en}
@@ -680,7 +772,10 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
           ) : (
             <>
               <div className="prompt">
-                <p className="eyebrow">{LABEL[mode]}</p>
+                <p className="mission-tag">
+                  {TASKS[taskOf(step, mode)].emoji} {TASKS[taskOf(step, mode)].mission}
+                </p>
+                <p className="mission-how">{LABEL[mode]}</p>
                 {renderPrompt()}
               </div>
               {renderAnswerArea()}
@@ -688,7 +783,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
             </>
           )}
         </motion.div>
-      </AnimatePresence>
+      </AnimatePresence>}
 
       <AnimatePresence>
         {outcome && (
@@ -782,7 +877,31 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showTasks && (
+          <motion.div className="sheet tasks" role="dialog" aria-label="Tarefas da viagem" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 32 }}>
+            <div className="sheet-inner">
+              <h3>📋 Tarefas até {planet.name}</h3>
+              <TaskList lines={tasks} />
+              <button type="button" className="btn btn-primary btn-block" onClick={() => setShowTasks(false)} autoFocus>
+                Voltar ao voo
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {taskToast && (
+          <motion.div key={taskToast.id} className="task-toast" role="status" initial={{ opacity: 0, y: -16, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: -16, x: '-50%' }}>
+            {taskToast.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Starfield warp={burst} />
       <Confetti burst={burst} amount={combo > 0 && combo % 5 === 0 ? 48 : 22} />
     </section>
   );
 }
+
