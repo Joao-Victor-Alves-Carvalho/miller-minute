@@ -49,6 +49,25 @@ O GitHub pode atrasar tarefas agendadas em alguns minutos e pausa as agendadas d
 atividade por 60 dias (basta reativar na aba Actions). No iPhone, só funciona com o app instalado
 na Tela de Início (iOS 16.4+). As mensagens ficam em `src/lib/pushMessages.ts`.
 
+**IA (Chamada da Endurance, diário e frases)**: o app conversa com o Claude Haiku 5.5 por meio
+de um servidor próprio na Cloudflare Workers (pasta `worker/`), que guarda a chave da API.
+Configuração única:
+1. Anthropic: console.anthropic.com → crédito e **teto de gasto mensal** (Limits) → criar uma
+   chave de API só para este app. Ative a verificação em duas etapas.
+2. Cloudflare (plano gratuito): criar um API token com o modelo "Edit Cloudflare Workers" e
+   anotar o Account ID.
+3. GitHub → Settings → Secrets and variables → Actions: `CLOUDFLARE_API_TOKEN` e
+   `CLOUDFLARE_ACCOUNT_ID`. Depois, aba Actions → **Deploy do servidor da IA** → Run workflow.
+4. Cloudflare → Workers → `miller-minute-ai` → Settings → Variables and Secrets → dois
+   **Secrets**: `ANTHROPIC_API_KEY` (a chave) e `APP_ACCESS_CODE` (um código longo inventado).
+   A chave nunca passa pelo GitHub nem pelo app.
+5. No app: Ajustes → Servidor da IA → endereço `miller-minute-ai.SEU-SUBDOMINIO.workers.dev` +
+   o código de acesso → **Salvar e testar** (o teste não gasta crédito).
+
+O servidor só atende quem envia o código de acesso, só responde às origens do app e limita o
+tamanho das conversas. O diário e as frases capturadas funcionam offline: ficam numa fila e são
+corrigidos quando a internet volta.
+
 **Microfone**: no Android (Chrome), o reconhecimento de voz usa o serviço do Google e precisa de
 internet. Se o navegador não tiver reconhecimento de voz, as perguntas de falar não aparecem.
 

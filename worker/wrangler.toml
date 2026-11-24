@@ -1,0 +1,11 @@
+# Servidor da IA do Miller Minute (Cloudflare Workers).
+# Segredos (configurados no painel da Cloudflare, nunca no repositório):
+#   ANTHROPIC_API_KEY — chave da API da Anthropic
+#   APP_ACCESS_CODE   — código de acesso que o app envia no cabeçalho X-Access-Code
+name = "miller-minute-ai"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+# Mantém os segredos e variáveis criados no painel entre um deploy e outro.
+keep_vars = true

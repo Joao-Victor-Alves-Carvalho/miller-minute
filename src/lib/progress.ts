@@ -1,4 +1,4 @@
-import type { Pack } from '../data/types';
+import type { Item, Pack } from '../data/types';
 import type { SituationRecord } from './chat';
 import { DAY, dayKey, isMastered, startOfDay, type CardState } from './srs';
 
@@ -58,9 +58,25 @@ export interface Progress {
   today: { day: string; done: Activity[] };
   /** Cápsula do tempo: gravações feitas (o áudio fica no IndexedDB do aparelho). */
   capsules: CapsuleEntry[];
+  /** "Minhas frases": cartões criados pela IA a partir das suas conversas e textos. */
+  custom: Item[];
+  /** Fila da IA: textos escritos (inclusive offline) esperando correção. */
+  aiQueue: AiJob[];
+  /** Chamadas da Endurance concluídas. */
+  calls: { done: number; lastAt: number };
 }
 
-export type Activity = 'session' | 'story' | 'ear' | 'chat';
+export interface AiMistake {
+  said: string;
+  better: string;
+  why_pt: string;
+}
+
+export type AiJob =
+  | { id: string; kind: 'diary'; text: string; at: number; status: 'pending' | 'done' | 'error'; error?: string; result?: { corrected: string; natural: string; mistakes: AiMistake[]; tip_pt: string } }
+  | { id: string; kind: 'phrase'; text: string; context?: string; at: number; status: 'pending' | 'done' | 'error'; error?: string; result?: { en: string; pt: string; explanation_pt: string; example: string } };
+
+export type Activity = 'session' | 'story' | 'ear' | 'chat' | 'call';
 
 export interface CapsuleEntry {
   /** Id da gravação no IndexedDB. */
@@ -100,6 +116,9 @@ export function emptyProgress(): Progress {
     bonusNew: { day: '', count: 0 },
     today: { day: '', done: [] },
     capsules: [],
+    custom: [],
+    aiQueue: [],
+    calls: { done: 0, lastAt: 0 },
   };
 }
 
@@ -132,6 +151,8 @@ export function unlockedPacks(packs: readonly Pack[], cards: Readonly<Record<str
     open = seenRatio(pack, cards) >= UNLOCK_RATIO;
   }
   if (Object.keys(cards).length >= THEME_UNLOCK_SEEN) out.push(...packs.filter((p) => p.kind === 'theme'));
+  // "Minhas frases" fica sempre liberado quando tiver itens.
+  out.push(...packs.filter((p) => p.kind === 'mine' && p.items.length > 0));
   return out;
 }
 
@@ -291,6 +312,9 @@ export function normalizeProgress(parsed: Partial<Progress>): Progress {
     bonusNew: { ...base.bonusNew, ...parsed.bonusNew },
     today: { ...base.today, ...parsed.today },
     capsules: Array.isArray(parsed.capsules) ? parsed.capsules : [],
+    custom: Array.isArray(parsed.custom) ? parsed.custom : [],
+    aiQueue: Array.isArray(parsed.aiQueue) ? parsed.aiQueue : [],
+    calls: { ...base.calls, ...parsed.calls },
   };
 }
 
@@ -310,4 +334,46 @@ export function saveProgress(progress: Progress): void {
   } catch {
     // Sem armazenamento (aba anônima, por exemplo): o app segue funcionando nesta sessão.
   }
+}
+
+/** Id estável de uma frase sua (o texto em inglês forma o id, como nos pacotes). */
+export function customId(en: string): string {
+  const slug = en
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return `mine:${slug || 'frase'}`;
+}
+
+/**
+ * Adiciona frases suas ao pacote "Minhas frases", sem repetir (nem com itens já existentes).
+ * `asMistake` coloca a frase no caderno de erros (veio de um erro seu).
+ */
+export function addCustomItems(
+  progress: Progress,
+  items: { en: string; pt: string; ex?: string; exPt?: string }[],
+  now: number,
+  asMistake = false,
+): Progress {
+  const known = new Set(progress.custom.map((i) => i.id));
+  const fresh: Item[] = [];
+  const cards = { ...progress.cards };
+  for (const it of items) {
+    const en = it.en.trim();
+    const pt = it.pt.trim();
+    if (!en || !pt) continue;
+    const id = customId(en);
+    if (known.has(id)) continue;
+    known.add(id);
+    const item: Item = { id, en, pt, pos: en.includes(' ') ? 'frase' : 'substantivo' };
+    if (it.ex) item.ex = it.ex;
+    if (it.exPt) item.exPt = it.exPt;
+    fresh.push(item);
+    if (asMistake) cards[id] = { box: 0, due: now, correct: 0, wrong: 1, lastSeen: now, lastWrong: now };
+  }
+  if (fresh.length === 0) return progress;
+  return { ...progress, custom: [...progress.custom, ...fresh], cards };
 }

@@ -601,3 +601,82 @@ describe('cápsula do tempo', () => {
     expect(promptForMonth(9).en).toContain('past self');
   });
 });
+
+describe('IA: cliente, fila offline e Minhas frases', () => {
+  it('cliente: envia o código e traduz os erros do servidor', async () => {
+    const { makeCaller, AiError, normalizeUrl } = await import('./ai');
+    expect(normalizeUrl(' meu.workers.dev/ ')).toBe('https://meu.workers.dev');
+    const seen: { url: string; code: string | null }[] = [];
+    const fake = (status: number, body: unknown) =>
+      (async (url: string, init?: RequestInit) => {
+        seen.push({ url, code: new Headers(init?.headers).get('X-Access-Code') });
+        return new Response(JSON.stringify(body), { status });
+      }) as unknown as typeof fetch;
+    const cfg = { url: 'https://x.dev', code: 'segredo' };
+    expect(await makeCaller(cfg, fake(200, { ok: true }))('/ping', {})).toEqual({ ok: true });
+    expect(seen[0]).toEqual({ url: 'https://x.dev/ping', code: 'segredo' });
+    await expect(makeCaller(cfg, fake(401, { error: 'x' }))('/chat', {})).rejects.toMatchObject({ kind: 'auth' });
+    await expect(makeCaller(cfg, fake(429, {}))('/chat', {})).rejects.toMatchObject({ kind: 'limit' });
+    await expect(makeCaller(cfg, fake(502, { error: 'erro da API' }))('/chat', {})).rejects.toMatchObject({ kind: 'server' });
+    const broken = (async () => {
+      throw new TypeError('network');
+    }) as unknown as typeof fetch;
+    await expect(makeCaller(cfg, broken)('/chat', {})).rejects.toBeInstanceOf(AiError);
+    await expect(makeCaller(null)('/chat', {})).rejects.toMatchObject({ kind: 'config' });
+  });
+
+  it('fila: guarda offline, processa ao voltar e cria cartões', async () => {
+    const { enqueue, processQueue, pendingJobs, AiError } = await import('./ai');
+    let p = enqueue(emptyProgress(), { kind: 'phrase', text: 'brake a leg', context: 'série' }, NOW);
+    p = enqueue(p, { kind: 'diary', text: 'Today I go to work.' }, NOW + 1);
+    expect(pendingJobs(p)).toHaveLength(2);
+    const update = (fn: (x: typeof p) => typeof p) => {
+      p = fn(p);
+    };
+    // Sem internet: para na primeira tentativa e mantém tudo na fila.
+    const offline = async () => {
+      throw new AiError('sem internet', 'offline');
+    };
+    expect(await processQueue(() => p, update, offline)).toBe(0);
+    expect(pendingJobs(p)).toHaveLength(2);
+    // Com internet: processa os dois.
+    const online = async (_path: string, body: Record<string, unknown>) =>
+      body.kind === 'phrase'
+        ? { en: 'Break a leg!', pt: 'Boa sorte!', explanation_pt: 'expressão de teatro', example: 'Break a leg tonight!' }
+        : { corrected: 'Today I went to work.', natural: 'I went to work today.', mistakes: [{ said: 'I go', better: 'I went', why_pt: 'passado: went' }], tip_pt: 'Use o passado.' };
+    expect(await processQueue(() => p, update, online)).toBe(2);
+    expect(pendingJobs(p)).toHaveLength(0);
+    expect(p.custom.map((i) => i.en).sort()).toEqual(['Break a leg!', 'I went']);
+    // O erro do diário vai para o caderno de erros.
+    expect(p.cards['mine:i-went']?.lastWrong).toBeDefined();
+    expect(p.cards['mine:break-a-leg']).toBeUndefined();
+  });
+
+  it('erro do servidor marca só aquele item e segue a fila', async () => {
+    const { enqueue, processQueue, AiError } = await import('./ai');
+    let p = enqueue(enqueue(emptyProgress(), { kind: 'phrase', text: 'a' }, NOW), { kind: 'phrase', text: 'b' }, NOW + 1);
+    const update = (fn: (x: typeof p) => typeof p) => {
+      p = fn(p);
+    };
+    let n = 0;
+    const flaky = async () => {
+      n++;
+      if (n === 1) throw new AiError('O servidor respondeu: erro', 'server');
+      return { en: 'Bee', pt: 'abelha', explanation_pt: '', example: '' };
+    };
+    expect(await processQueue(() => p, update, flaky)).toBe(1);
+    expect(p.aiQueue.map((j) => j.status).sort()).toEqual(['done', 'error']);
+  });
+
+  it('Minhas frases: sem repetição e sempre liberado quando tem itens', async () => {
+    const { addCustomItems, customId } = await import('./progress');
+    const { minePack } = await import('../data/packs');
+    expect(customId("I'm on my way!")).toBe('mine:i-m-on-my-way');
+    let p = addCustomItems(emptyProgress(), [{ en: 'Watch out', pt: 'Cuidado' }, { en: 'watch out', pt: 'cuidado' }, { en: '', pt: 'x' }], NOW);
+    expect(p.custom).toHaveLength(1);
+    p = addCustomItems(p, [{ en: 'Watch out', pt: 'Cuidado' }], NOW);
+    expect(p.custom).toHaveLength(1);
+    expect(unlockedPacks([minePack([])], {})).toHaveLength(0);
+    expect(unlockedPacks([minePack(p.custom)], {})).toHaveLength(1);
+  });
+});

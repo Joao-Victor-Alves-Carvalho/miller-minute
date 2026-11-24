@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { notes } from '../data/notes';
-import { itemsById } from '../data/packs';
+import { getItem } from '../data/packs';
 import type { Item } from '../data/types';
 import type { Mood } from '../components/Aurora';
 import { Confetti } from '../components/Confetti';
@@ -87,7 +87,7 @@ export function Session({ steps, kind, pool, progress, updateProgress, setMood, 
   const graded = useRef<{ before: CardState; at: number } | null>(null);
 
   const step = queue[index];
-  const item = step ? itemsById.get(step.itemId) : undefined;
+  const item = step ? getItem(step.itemId) : undefined;
   const audioOn = pausedMinutes(progress, 'audio', Date.now()) === 0;
   const autoAudio = progress.settings.autoAudio && audioOn;
   const soundsOn = progress.settings.sounds && audioOn;

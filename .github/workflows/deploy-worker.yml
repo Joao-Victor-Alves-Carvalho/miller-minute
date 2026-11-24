@@ -1,0 +1,52 @@
+# Publica o servidor da IA (pasta worker/) na Cloudflare Workers.
+# Segredos do GitHub necessários: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID.
+# A chave da Anthropic e o código de acesso NÃO passam por aqui: ficam só no painel da Cloudflare
+# (Workers → miller-minute-ai → Settings → Variables and Secrets: ANTHROPIC_API_KEY e APP_ACCESS_CODE).
+name: Deploy do servidor da IA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['worker/**']
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir se a Cloudflare está configurada
+        id: cfg
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "Cloudflare ainda não configurada (faltam CLOUDFLARE_API_TOKEN e/ou CLOUDFLARE_ACCOUNT_ID). Nada publicado."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          node-version: 22
+      - name: Instalar e conferir
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          cd worker
+          npm ci
+          npm run check
+      - name: Publicar na Cloudflare
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          cd worker
+          npx wrangler deploy

@@ -18,3 +18,8 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      - name: Servidor da IA (worker)
+        run: |
+          cd worker
+          npm ci
+          npm run check

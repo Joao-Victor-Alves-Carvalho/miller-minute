@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { packs } from './data/packs';
+import { minePack, packs, setCustomItems } from './data/packs';
 import { scenes } from './data/scenes';
 import { situations } from './data/situations';
 import { stories } from './data/stories';
@@ -20,6 +20,7 @@ import {
   orderByFocus,
   pausedMinutes,
   registerStudyDay,
+  addCustomItems,
   markActivity,
   addBonusNew,
   BONUS_STEP,
@@ -40,6 +41,9 @@ import { Situations } from './screens/Situations';
 import { Stories } from './screens/Stories';
 import { StoryReader } from './screens/StoryReader';
 import { Words } from './screens/Words';
+import { Endurance } from './screens/Endurance';
+import { Journal } from './screens/Journal';
+import { enqueue, loadAiConfig, makeCaller, pendingJobs, processQueue, saveAiConfig, type AiConfig } from './lib/ai';
 import { Capsule } from './screens/Capsule';
 import { Metro } from './screens/Metro';
 import { buildMetroPlan, type MetroStep } from './lib/metro';
@@ -59,12 +63,14 @@ type Screen =
   | { name: 'progress' }
   | { name: 'settings' }
   | { name: 'metro' }
-  | { name: 'capsule' };
+  | { name: 'capsule' }
+  | { name: 'endurance' }
+  | { name: 'journal' };
 
-export type NavTarget = 'words' | 'situations' | 'scenes' | 'stories' | 'ear' | 'progress' | 'settings' | 'metro' | 'capsule';
+export type NavTarget = 'words' | 'situations' | 'scenes' | 'stories' | 'ear' | 'progress' | 'settings' | 'metro' | 'capsule' | 'endurance' | 'journal';
 
 /** Telas em que o relógio de estudo (Tempo de Miller) conta. */
-const STUDY_SCREENS = new Set<Screen['name']>(['session', 'chat', 'story', 'ear']);
+const STUDY_SCREENS = new Set<Screen['name']>(['session', 'chat', 'story', 'ear', 'endurance', 'journal']);
 
 export function App() {
   const [progress, setProgress] = useState<Progress>(loadProgress);
@@ -75,6 +81,51 @@ export function App() {
   const sessionStartMs = useRef(0);
 
   useEffect(() => saveProgress(progress), [progress]);
+
+  // "Minhas frases": registra os itens para as sessões encontrarem pelo id.
+  setCustomItems(progress.custom);
+
+  // ---------- IA (servidor na Cloudflare) e fila offline ----------
+  const [aiConfig, setAiConfig] = useState<AiConfig | null>(loadAiConfig);
+  const caller = useMemo(() => (aiConfig ? makeCaller(aiConfig) : null), [aiConfig]);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const syncingRef = useRef(false);
+
+  const sync = useCallback(async () => {
+    if (!caller || syncingRef.current || !navigator.onLine) return;
+    if (pendingJobs(progressRef.current).length === 0) return;
+    syncingRef.current = true;
+    setSyncing(true);
+    try {
+      await processQueue(() => progressRef.current, setProgress, caller);
+    } finally {
+      syncingRef.current = false;
+      setSyncing(false);
+    }
+  }, [caller]);
+
+  // Sincroniza ao abrir, ao configurar o servidor e quando a internet volta (saída do metrô).
+  useEffect(() => {
+    void sync();
+    const onNet = () => {
+      setOnline(navigator.onLine);
+      if (navigator.onLine) void sync();
+    };
+    window.addEventListener('online', onNet);
+    window.addEventListener('offline', onNet);
+    return () => {
+      window.removeEventListener('online', onNet);
+      window.removeEventListener('offline', onNet);
+    };
+  }, [sync]);
+
+  const pendingCount = pendingJobs(progress).length;
+  useEffect(() => {
+    if (pendingCount > 0) void sync();
+  }, [pendingCount, sync]);
 
   // Medalhas: confere a cada mudança no progresso e avisa as novas.
   useEffect(() => {
@@ -107,7 +158,7 @@ export function App() {
   // Recalcula a cada volta para a tela inicial (o "agora" muda).
   const plan = useMemo(() => {
     const now = Date.now();
-    const unlocked = unlockedPacks(packs, progress.cards);
+    const unlocked = unlockedPacks([...packs, minePack(progress.custom)], progress.cards);
     const pool = unlocked.flatMap((p) => p.items);
     const due = dueItems(pool, progress.cards, now);
     const unseen = orderByFocus(unseenItems(pool, progress.cards), progress.settings.focusPack);
@@ -219,6 +270,8 @@ export function App() {
                 onExtra={startExtra}
                 unseenLeft={plan.unseen.length}
                 onMoreWords={moreWords}
+                aiReady={caller !== null}
+                pendingAi={pendingCount}
                 onMistakes={startMistakes}
                 onNavigate={navigate}
                 onFocus={(id) => setProgress((p) => ({ ...p, settings: { ...p.settings, focusPack: id } }))}
@@ -304,7 +357,52 @@ export function App() {
               />
             )}
             {screen.name === 'progress' && <ProgressScreen progress={progress} onBack={goHome} onWords={() => setScreen({ name: 'words' })} />}
-            {screen.name === 'settings' && <Settings progress={progress} setProgress={setProgress} onBack={goHome} />}
+            {screen.name === 'settings' && (
+              <Settings
+                progress={progress}
+                setProgress={setProgress}
+                aiConfig={aiConfig}
+                onAiConfig={(cfg) => {
+                  saveAiConfig(cfg);
+                  setAiConfig(cfg);
+                }}
+                onBack={goHome}
+              />
+            )}
+            {screen.name === 'endurance' && (
+              <Endurance
+                progress={progress}
+                call={caller}
+                onFinish={(report) =>
+                  setProgress((p) => {
+                    const now = Date.now();
+                    let next = addCustomItems(
+                      p,
+                      report.mistakes.filter((m) => m.better).map((m) => ({ en: m.better, pt: m.why_pt.slice(0, 80), ex: m.better, exPt: `Você disse: "${m.said}"` })),
+                      now,
+                      true,
+                    );
+                    next = { ...next, calls: { done: next.calls.done + 1, lastAt: now } };
+                    return markActivity(registerStudyDay(next, now), now, 'call');
+                  })
+                }
+                onAddWords={(words) => setProgress((p) => addCustomItems(p, words.map((w) => ({ en: w.en, pt: w.pt, ex: w.example })), Date.now()))}
+                onSettings={() => setScreen({ name: 'settings' })}
+                onBack={goHome}
+              />
+            )}
+            {screen.name === 'journal' && (
+              <Journal
+                jobs={progress.aiQueue}
+                configured={caller !== null}
+                online={online}
+                syncing={syncing}
+                onAdd={(job) => setProgress((p) => enqueue(p, job, Date.now()))}
+                onSync={() => void sync()}
+                onSettings={() => setScreen({ name: 'settings' })}
+                onBack={goHome}
+              />
+            )}
             {screen.name === 'metro' && <Metro steps={metroSteps} onStep={runMetroStep} onBack={leaveMetro} />}
             {screen.name === 'capsule' && <Capsule progress={progress} setProgress={setProgress} onBack={goHome} />}
           </motion.div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from 'react';
 import { IconArrowLeft } from '../components/Icons';
 import { saveFile } from '../lib/files';
+import { AiError, makeCaller, normalizeUrl, type AiConfig } from '../lib/ai';
 import { backupJson, decodeBackup, describe, encodeBackup } from '../lib/backup';
 import { buildReminderIcs, parseTime } from '../lib/ics';
 import type { Progress, Settings as SettingsT } from '../lib/progress';
@@ -29,8 +30,19 @@ function Choice<T extends number>({ value, options, onChange, suffix }: { value:
   );
 }
 
-export function Settings({ progress, setProgress, onBack }: { progress: Progress; setProgress: Dispatch<SetStateAction<Progress>>; onBack: () => void }) {
+interface SettingsProps {
+  progress: Progress;
+  setProgress: Dispatch<SetStateAction<Progress>>;
+  aiConfig: AiConfig | null;
+  onAiConfig: (cfg: AiConfig | null) => void;
+  onBack: () => void;
+}
+
+export function Settings({ progress, setProgress, aiConfig, onAiConfig, onBack }: SettingsProps) {
   const [msg, setMsg] = useState<string | null>(null);
+  const [aiUrl, setAiUrl] = useState(aiConfig?.url ?? '');
+  const [aiCode, setAiCode] = useState(aiConfig?.code ?? '');
+  const [aiState, setAiState] = useState<{ kind: 'idle' | 'testing' | 'ok' | 'error'; text?: string }>({ kind: aiConfig ? 'ok' : 'idle' });
   const [importText, setImportText] = useState('');
   const [pending, setPending] = useState<Progress | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -126,6 +138,53 @@ export function Settings({ progress, setProgress, onBack }: { progress: Progress
           Palavras novas por dia
         </p>
         <Choice value={s.newPerDay} options={[10, 15, 20, 30]} suffix="" onChange={(v) => set({ newPerDay: v })} />
+      </div>
+
+      <div className="settings-card glass">
+        <p className="eyebrow">Servidor da IA (Chamada da Endurance, diário e frases)</p>
+        <p className="muted small">
+          Endereço do seu servidor na Cloudflare e o código de acesso que você definiu lá. Ficam só neste aparelho e não entram no backup.
+        </p>
+        <input className="type-input" value={aiUrl} onChange={(e) => setAiUrl(e.target.value)} placeholder="miller-minute-ai.SEU-NOME.workers.dev" aria-label="Endereço do servidor da IA" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+        <input className="type-input" value={aiCode} onChange={(e) => setAiCode(e.target.value)} placeholder="Código de acesso" aria-label="Código de acesso do servidor" type="password" autoCapitalize="off" autoCorrect="off" />
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ flex: 1 }}
+            disabled={!aiUrl.trim() || !aiCode.trim() || aiState.kind === 'testing'}
+            onClick={async () => {
+              const cfg = { url: normalizeUrl(aiUrl), code: aiCode.trim() };
+              setAiUrl(cfg.url);
+              setAiState({ kind: 'testing' });
+              try {
+                await makeCaller(cfg)('/ping', {});
+                onAiConfig(cfg);
+                setAiState({ kind: 'ok', text: 'Conectado! O servidor respondeu e o código foi aceito.' });
+              } catch (err) {
+                setAiState({ kind: 'error', text: err instanceof AiError ? err.message : 'Não consegui conectar.' });
+              }
+            }}
+          >
+            {aiState.kind === 'testing' ? 'Testando…' : 'Salvar e testar'}
+          </button>
+          {aiConfig && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                onAiConfig(null);
+                setAiUrl('');
+                setAiCode('');
+                setAiState({ kind: 'idle' });
+              }}
+            >
+              Remover
+            </button>
+          )}
+        </div>
+        {aiState.kind === 'ok' && <p className="flash" style={{ margin: 0 }}>✅ {aiState.text ?? 'Servidor configurado.'}</p>}
+        {aiState.kind === 'error' && <p className="chat-feedback" style={{ margin: 0 }}>{aiState.text}</p>}
       </div>
 
       <div className="settings-card glass">

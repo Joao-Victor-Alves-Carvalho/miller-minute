@@ -2339,3 +2339,122 @@ input:focus-visible {
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
+
+/* Chamada da Endurance, diário e frases */
+.suggest.on {
+  background: rgba(139, 92, 246, 0.35);
+  border-color: var(--violet);
+}
+
+.endurance-log {
+  flex: none;
+  max-height: 46dvh;
+  min-height: 200px;
+  padding: 4px 0;
+  border-radius: 16px;
+  background-image: none;
+}
+
+.call-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.call-controls .mic-btn {
+  width: 84px;
+  height: 84px;
+}
+
+.call-controls .mic-btn svg {
+  width: 36px;
+  height: 36px;
+}
+
+.mistake-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mistake-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.mistake-list .said {
+  color: var(--bad);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.mistake-list .better {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.tabs button {
+  padding: 10px;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
+.tabs button.on {
+  background: var(--violet);
+}
+
+.journal-box {
+  min-height: 120px;
+  font-family: var(--font);
+  font-size: 17px;
+}
+
+.job-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.job {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.job.pending {
+  border-style: dashed;
+}
+
+.job-text {
+  margin: 0;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.job-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
