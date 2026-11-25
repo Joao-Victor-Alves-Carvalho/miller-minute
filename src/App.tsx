@@ -55,6 +55,7 @@ import { Capsule } from './screens/Capsule';
 import { Metro } from './screens/Metro';
 import { buildMetroPlan, type MetroStep } from './lib/metro';
 import { canSpeak } from './lib/speech';
+import { applyAppearance, watchSystemAppearance } from './lib/theme';
 
 type Screen =
   | { name: 'home' }
@@ -91,6 +92,14 @@ export function App() {
   const sessionStartMs = useRef(0);
 
   useEffect(() => saveProgress(progress), [progress]);
+
+  // Modo claro/escuro (Ajustes → Aparência). No modo "system", acompanha o celular.
+  const appearance = progress.settings.appearance;
+  useEffect(() => {
+    applyAppearance(appearance);
+    if (appearance !== 'system') return;
+    return watchSystemAppearance(() => applyAppearance('system'));
+  }, [appearance]);
 
   // "Minhas frases": registra os itens para as sessões encontrarem pelo id.
   setCustomItems(progress.custom);

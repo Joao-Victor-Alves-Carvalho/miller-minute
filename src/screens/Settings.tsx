@@ -4,7 +4,7 @@ import { saveFile } from '../lib/files';
 import { AiError, makeCaller, normalizeUrl, type AiConfig } from '../lib/ai';
 import { backupJson, decodeBackup, describe, encodeBackup } from '../lib/backup';
 import { buildReminderIcs, parseTime } from '../lib/ics';
-import type { Progress, Settings as SettingsT } from '../lib/progress';
+import type { Appearance, Progress, Settings as SettingsT } from '../lib/progress';
 import { disablePush, enablePush, pushStatus, testNotification, type PushStatus } from '../lib/push';
 import { playCorrect } from '../lib/sfx';
 
@@ -29,6 +29,12 @@ function Choice<T extends number>({ value, options, onChange, suffix }: { value:
     </div>
   );
 }
+
+const APPEARANCES: { value: Appearance; label: string }[] = [
+  { value: 'dark', label: '🌙 Escuro' },
+  { value: 'light', label: '☀️ Claro' },
+  { value: 'system', label: '📱 Automático' },
+];
 
 interface SettingsProps {
   progress: Progress;
@@ -129,6 +135,20 @@ export function Settings({ progress, setProgress, aiConfig, onAiConfig, onBack }
             }}
           />
         </div>
+      </div>
+
+      <div className="settings-card glass">
+        <p className="eyebrow">Aparência</p>
+        <div className="choice-row" role="radiogroup" aria-label="Aparência">
+          {APPEARANCES.map((o) => (
+            <button key={o.value} type="button" role="radio" aria-checked={s.appearance === o.value} className={`choice${s.appearance === o.value ? ' on' : ''}`} onClick={() => set({ appearance: o.value })}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          Automático segue o modo claro/escuro do celular.
+        </p>
       </div>
 
       <div className="settings-card glass">
