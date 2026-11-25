@@ -13,7 +13,11 @@ export interface Settings {
   focusPack: string | null;
   /** Horário do lembrete diário ("HH:MM"). */
   reminder: string;
+  /** Aparência: escuro, claro ou seguir o celular. */
+  appearance: Appearance;
 }
+
+export type Appearance = 'dark' | 'light' | 'system';
 
 export interface DayStats {
   answers: number;
@@ -111,7 +115,7 @@ export function emptyProgress(): Progress {
     totalAnswers: 0,
     totalCorrect: 0,
     bestCombo: 0,
-    settings: { autoAudio: true, sounds: true, newPerDay: 20, goalMinutes: 10, focusPack: null, reminder: '20:00' },
+    settings: { autoAudio: true, sounds: true, newPerDay: 20, goalMinutes: 10, focusPack: null, reminder: '20:00', appearance: 'dark' },
     pauses: { audio: 0, mic: 0 },
     history: {},
     situations: {},
@@ -299,7 +303,7 @@ export function capabilities(
 }
 
 // Chave antiga (nome provisório "Loop"): não mudar, senão o progresso salvo se perde.
-const STORAGE_KEY = 'loop-english:v1';
+export const STORAGE_KEY = 'loop-english:v1';
 
 /** Completa um progresso salvo (ou importado) com os campos que faltam. */
 export function normalizeProgress(parsed: Partial<Progress>): Progress {

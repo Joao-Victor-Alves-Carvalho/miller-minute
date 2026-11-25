@@ -1,8 +1,8 @@
 :root {
   --bg: #07070d;
-  --surface: rgba(255, 255, 255, 0.055);
-  --surface-strong: rgba(255, 255, 255, 0.09);
-  --border: rgba(255, 255, 255, 0.1);
+  --surface: rgb(var(--fg-rgb) / 0.055);
+  --surface-strong: rgb(var(--fg-rgb) / 0.09);
+  --border: rgb(var(--fg-rgb) / 0.1);
   --text: #f5f4ff;
   --muted: #a3a1c2;
   --violet: #8b5cf6;
@@ -14,7 +14,41 @@
   --gold: #ffc94d;
   --radius: 22px;
   --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Primeiro plano das linhas, trilhas e véus (branco no escuro). */
+  --fg-rgb: 255 255 255;
+  /* Sombras e poços (preto no escuro; bem mais leve no claro). */
+  --shade-rgb: 0 0 0;
+  --shade-k: 1;
+  --sheet-good: linear-gradient(180deg, #2b3d12, #141e08 55%);
+  --sheet-bad: linear-gradient(180deg, #4a1422, #230810 55%);
+  --sheet-neutral: linear-gradient(180deg, #1b1840, #0b0b1a 60%);
+  --blob-opacity: 1;
   color-scheme: dark;
+}
+
+/* ---------- Modo claro (Ajustes → Aparência) ---------- */
+:root[data-theme='light'] {
+  --bg: #f3f2fa;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-strong: rgba(255, 255, 255, 0.96);
+  --border: rgba(40, 30, 110, 0.13);
+  --text: #16142b;
+  --muted: #5b5878;
+  --violet: #7c3aed;
+  --cyan: #0e7490;
+  --good: #4d8a0b;
+  --good-ink: #ffffff;
+  --bad: #dc2650;
+  --bad-ink: #ffffff;
+  --gold: #a16207;
+  --fg-rgb: 30 24 90;
+  --shade-rgb: 30 24 90;
+  --shade-k: 0.25;
+  --sheet-good: linear-gradient(180deg, #e8f7d4, #f6fbef 55%);
+  --sheet-bad: linear-gradient(180deg, #fde2e8, #fff4f6 55%);
+  --sheet-neutral: linear-gradient(180deg, #e9e6ff, #f8f7ff 60%);
+  --blob-opacity: 0.55;
+  color-scheme: light;
 }
 
 * {
@@ -350,7 +384,7 @@ input:focus-visible {
 .meter {
   height: 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--fg-rgb) / 0.08);
   overflow: hidden;
   display: flex;
 }
@@ -390,7 +424,7 @@ input:focus-visible {
   flex: 1;
   height: 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--fg-rgb) / 0.08);
   overflow: hidden;
 }
 
@@ -480,7 +514,7 @@ input:focus-visible {
 @media (hover: hover) {
   .option:not(:disabled):hover {
     background: var(--surface-strong);
-    border-color: rgba(255, 255, 255, 0.25);
+    border-color: rgb(var(--fg-rgb) / 0.25);
   }
 }
 
@@ -503,7 +537,7 @@ input:focus-visible {
 
 .option.is-wrong .key {
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: rgb(var(--fg-rgb) / 0.4);
 }
 
 .option.is-dim {
@@ -525,7 +559,7 @@ input:focus-visible {
 }
 
 .type-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgb(var(--fg-rgb) / 0.3);
 }
 
 .type-input.is-correct {
@@ -567,7 +601,7 @@ input:focus-visible {
 .example {
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgb(var(--shade-rgb) / calc(0.25 * var(--shade-k)));
   border: 1px solid var(--border);
   display: flex;
   gap: 12px;
@@ -619,14 +653,14 @@ input:focus-visible {
 }
 
 .sheet.good {
-  background: linear-gradient(180deg, #2b3d12, #141e08 55%);
-  box-shadow: 0 -20px 40px -10px rgba(0, 0, 0, 0.6);
+  background: var(--sheet-good);
+  box-shadow: 0 -20px 40px -10px rgb(var(--shade-rgb) / calc(0.6 * var(--shade-k)));
   border-top: 1.5px solid var(--good);
 }
 
 .sheet.bad {
-  background: linear-gradient(180deg, #4a1422, #230810 55%);
-  box-shadow: 0 -20px 40px -10px rgba(0, 0, 0, 0.6);
+  background: var(--sheet-bad);
+  box-shadow: 0 -20px 40px -10px rgb(var(--shade-rgb) / calc(0.6 * var(--shade-k)));
   border-top: 1.5px solid var(--bad);
 }
 
@@ -748,7 +782,7 @@ input:focus-visible {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgb(var(--fg-rgb) / 0.15);
 }
 
 .dots i.on {
@@ -783,7 +817,7 @@ input:focus-visible {
   width: 46px;
   height: 28px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgb(var(--fg-rgb) / 0.15);
   position: relative;
   transition: background 200ms ease;
 }
@@ -953,7 +987,7 @@ input:focus-visible {
   gap: 8px;
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgb(var(--shade-rgb) / calc(0.3 * var(--shade-k)));
   border: 1px solid rgba(255, 92, 122, 0.3);
   max-height: 36dvh;
   overflow-y: auto;
@@ -1035,7 +1069,7 @@ input:focus-visible {
 .version {
   text-align: center;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgb(var(--fg-rgb) / 0.3);
   margin: 0;
 }
 
@@ -1105,7 +1139,7 @@ input:focus-visible {
 }
 
 .mini-stars .off {
-  color: rgba(255, 255, 255, 0.2);
+  color: rgb(var(--fg-rgb) / 0.2);
 }
 
 .situations-card {
@@ -1189,7 +1223,7 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-image: radial-gradient(rgb(var(--fg-rgb) / 0.035) 1px, transparent 1px);
   background-size: 18px 18px;
 }
 
@@ -1363,7 +1397,7 @@ input:focus-visible {
   align-items: center;
   gap: 6px;
   border-radius: 14px;
-  border: 1.5px dashed rgba(255, 255, 255, 0.2);
+  border: 1.5px dashed rgb(var(--fg-rgb) / 0.2);
 }
 
 .built .muted {
@@ -1439,7 +1473,7 @@ input:focus-visible {
   margin: 0;
   font-size: 40px;
   letter-spacing: 6px;
-  color: rgba(255, 255, 255, 0.15);
+  color: rgb(var(--fg-rgb) / 0.15);
 }
 
 .stars span {
@@ -1670,7 +1704,7 @@ input:focus-visible {
   min-height: 40px;
   padding: 8px 12px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgb(var(--shade-rgb) / calc(0.3 * var(--shade-k)));
   display: flex;
   flex-direction: column;
   font-size: 14px;
@@ -1687,7 +1721,7 @@ input:focus-visible {
 }
 
 .chart-svg .grid {
-  stroke: rgba(255, 255, 255, 0.08);
+  stroke: rgb(var(--fg-rgb) / 0.08);
   stroke-width: 1;
 }
 
@@ -1828,7 +1862,7 @@ input:focus-visible {
   gap: 2px;
   padding: 8px 4px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgb(var(--shade-rgb) / calc(0.25 * var(--shade-k)));
   border: 1.5px solid rgba(182, 255, 92, 0.25);
 }
 
@@ -2066,7 +2100,7 @@ input:focus-visible {
 .settings-card code {
   padding: 1px 6px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--fg-rgb) / 0.1);
   font-size: 13px;
 }
 
@@ -2142,7 +2176,7 @@ input:focus-visible {
 .metro-meter span {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--fg-rgb) / 0.1);
 }
 
 .metro-meter span.on {
@@ -2274,7 +2308,7 @@ input:focus-visible {
   gap: 10px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgb(var(--shade-rgb) / calc(0.25 * var(--shade-k)));
   border: 1px solid var(--border);
 }
 
@@ -2640,7 +2674,7 @@ input:focus-visible {
   flex: none;
   border-radius: 50%;
   background: radial-gradient(circle at 32% 30%, #ffffffcc 0 6%, var(--pa) 30%, var(--pb) 78%, #0b0b18 100%);
-  box-shadow: 0 0 28px -4px var(--pa), inset -8px -10px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 28px -4px var(--pa), inset -8px -10px 20px rgb(var(--shade-rgb) / calc(0.45 * var(--shade-k)));
 }
 
 .planet-orb.ring::after {
@@ -2673,7 +2707,7 @@ input:focus-visible {
   right: 30px;
   height: 4px;
   border-radius: 99px;
-  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 6px, transparent 6px 12px);
+  background: repeating-linear-gradient(90deg, rgb(var(--fg-rgb) / 0.18) 0 6px, transparent 6px 12px);
 }
 
 .flight-line > div {
@@ -2748,7 +2782,7 @@ input:focus-visible {
 .task-bar {
   height: 10px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--fg-rgb) / 0.08);
   overflow: hidden;
 }
 
@@ -2925,7 +2959,7 @@ input:focus-visible {
 }
 
 .star-dots i.dim {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgb(var(--fg-rgb) / 0.18);
   box-shadow: none;
   animation: dimming 2.4s ease-in-out infinite;
 }
@@ -2937,13 +2971,13 @@ input:focus-visible {
 
 .star-dots i.unseen {
   background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border: 1px dashed rgb(var(--fg-rgb) / 0.18);
   box-shadow: none;
 }
 
 @keyframes dimming {
   50% {
-    background: rgba(255, 255, 255, 0.45);
+    background: rgb(var(--fg-rgb) / 0.45);
   }
 }
 
@@ -2982,8 +3016,8 @@ input:focus-visible {
 
 .sheet.tasks {
   z-index: 20;
-  background: linear-gradient(180deg, #1b1840, #0b0b1a 60%);
-  box-shadow: 0 -20px 60px -10px rgba(0, 0, 0, 0.85);
+  background: var(--sheet-neutral);
+  box-shadow: 0 -20px 60px -10px rgb(var(--shade-rgb) / calc(0.85 * var(--shade-k)));
   border-top: 1.5px solid var(--cyan);
 }
 
@@ -2991,4 +3025,48 @@ input:focus-visible {
 .briefing .task-panel {
   text-align: left;
   justify-items: stretch;
+}
+
+/* Ajustes finos do modo claro */
+:root[data-theme='light'] .aurora {
+  opacity: 0.5;
+}
+
+:root[data-theme='light'] .star-dots i:not(.dim):not(.unseen) {
+  background: var(--violet);
+  box-shadow: none;
+}
+
+:root[data-theme='light'] .star-dots i.mastered:not(.dim) {
+  background: var(--good);
+}
+
+:root[data-theme='light'] .stars-layer {
+  filter: invert(1);
+  opacity: 0.25;
+}
+
+:root[data-theme='light'] .planet-orb {
+  box-shadow: 0 6px 22px -6px var(--pa), inset -8px -10px 20px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='light'] .toast {
+  background: rgba(255, 250, 235, 0.97);
+}
+
+/* Nave e capacete claros precisam de contorno no fundo claro. */
+:root[data-theme='light'] .ship-svg,
+:root[data-theme='light'] .avatar-btn svg,
+:root[data-theme='light'] .hangar-item svg {
+  filter: drop-shadow(0 1px 1.5px rgba(30, 24, 90, 0.55)) drop-shadow(0 0 0.5px rgba(30, 24, 90, 0.6));
+}
+
+/* Conversas (situações e cenas) no modo claro */
+:root[data-theme='light'] .chat {
+  background: rgba(243, 242, 250, 0.6);
+}
+
+:root[data-theme='light'] .chat-head,
+:root[data-theme='light'] .composer {
+  background: rgba(255, 255, 255, 0.92);
 }
